@@ -1,0 +1,21 @@
+## After completing this file, save it as .env 
+
+# absolute location of directory on your host machine to be mounted on docker container. Directory may be the same as this project or any of its parents.
+CODE_DIR="/absolute/path/to/code/dir"
+
+# openAI API key
+OPENAI_API_KEY="sk-yourkey"
+
+## Subsequent paramaters can be kept at their default values and are not needed to be changed.
+
+# username to be used in docker container. By deafult, uses same username as the host, but can be changed to anything else.
+NB_USER=${USER}
+
+# port at which jupyter notebook will be available. Same port is used when accessing the notebook from a browser on the host
+NB_PORT=8888
+
+# token used to access notebook. Setting to empty unsets a token.
+NB_TOKEN=""
+
+# password used to access notebook. Setting to empty unsets a token.
+NB_PASSWORD=""
