@@ -1,0 +1,3 @@
+[submodule "pyresume"]
+	path = pyresume
+	url = git@github.com:abhineetgupta/pyresume.git
