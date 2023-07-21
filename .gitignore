@@ -1,6 +1,5 @@
-# Personal Resume files
-my_*.yaml
-my_*.job
+# Personal Directory for Resume files
+my_*/
 
 # OS files
 *.DS_Store
