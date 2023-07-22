@@ -18,7 +18,7 @@ Create $\LaTeX$ and `pdf` résumés that have been tailored to each individual j
     ```
 
 ### How it works
-1. A raw résumé is provided by the user as a `yaml` file, which includes all their basic information, experience, projects, and skills. This file will be used as a basis for populating the final résumé corresponding to each job post. An example file `raw_resume.yaml` is included with steps for creating your own.
+1. A raw résumé is provided by the user as a `yaml` file, which includes all their basic information, experience, projects, and skills. This file will be used as a basis for populating the final résumé corresponding to each job post. An example file `raw_resume_example.yaml` is included with steps for creating your own.
 1. I have created LLM prompts in `prompts.py` for different résumé related tasks, such as, parsing a job post, rewriting a résumé section, extracting skills, identifying improvements, and writing a summary. The prompts are tested using ChatOpenAI models from [Langchain](https://js.langchain.com/docs/api/chat_models_openai/classes/ChatOpenAI).
 1. Based on a job post, the user can perform some or all the above tasks to generate a new `yaml` file with résumé data that is the most relevant for the job opportunity.
 1. The `yaml` file is then converted to $\LaTeX$ using a `jinja2` template. Templates are provided in the `templates` directory.

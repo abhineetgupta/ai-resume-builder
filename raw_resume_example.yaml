@@ -1,0 +1,82 @@
+basic:
+  name: Shakuntala Devi
+  address:
+    - Bangalore, Karnataka, India
+  contact:
+    email: calculate@shakuntla.devi
+    phone: 314 159 2653
+  websites:
+  # optionally add icons to websites from fontawesome - http://mirrors.ctan.org/fonts/fontawesome/doc/fontawesome.pdf
+    - text: guinness.com/fastest-computer
+      url: https://www.guinnessworldrecords.com/world-records/67741-human-computation
+      icon: beer
+
+education:
+  - school: Self-educated
+    degrees:
+      - names:
+          - Doctorate in Fast Computing
+          - Master's in Arithmetic
+        startdate: 1949
+        enddate: 1956
+        gpa: 4.0
+      - names: 
+          - Bachelor's in Mathematics
+        startdate: 1937
+        enddate: 1939
+    achievements:
+    - Taught card tricks to teachers
+    - Gold medal in Arithmetics
+
+experiences:
+  - company: University of California, Berkeley
+    titles:
+      - name: Super Computer
+        startdate: 1988
+        enddate: 1988
+      - name: Fast Computer
+        startdate: 1988
+        enddate: 1988
+    # the unedited tag in experiences can be used to automatically have the LLM rewrite it as highlights
+    unedited: |-
+      So this professor of educational psychology at the university decided to test me on math. I of course
+      beat all his expectations. True to the American dream, he became known for publishing a paper about 
+      me in the journal Intelligence.
+    
+  - company: Imperial College, London
+    titles:
+      - name: Computer
+        startdate: 1980
+        enddate: 1980
+    highlights:
+      - Demonstrated the multiplication of two 13-digit numbers in 28 seconds
+      - Won the Guinness World Record for the fastest human computer
+
+- company: Southern Methodist University, 
+    titles:
+      - name: Lead Calculator
+        startdate: 1977
+        enddate: 1977
+    # the unedited tag in experiences can be used to automatically have the LLM rewrite it as highlights
+    unedited: |-
+      I was asked to give the 23rd root of a 201-digit number. I gave my answer in a mere 50 seconds, which 
+      had to be later confirmed by the US Bureau of Standards using the UNIVAC 1101 computer. Confirming
+      my answer required writing a special program to perform such a large calculation, and it took the 
+      meager computer longer time than me.
+
+projects:
+  - Published over 10 books about math, astrology, memory, and puzzles
+  - Toured the world demonstrating my computing abilities
+  - Championed tolerance and compassion for homosexuals in India, and published book - The World of Homosexuals 
+
+skills:
+  - category: Technical
+    skills:
+      - Math
+      - Astrology
+      - Writing
+  - category: Non-technical
+    skills:
+      - Communication
+      - Memory and Recall
+  
