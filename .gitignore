@@ -1,3 +1,9 @@
+# Personal Directory for Resume files
+my_*/
+
+# OS files
+*.DS_Store
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

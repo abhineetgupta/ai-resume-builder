@@ -1,0 +1,180 @@
+\documentclass[8pt]{extarticle}
+
+\usepackage{fontawesome5}
+\usepackage{tabu}
+\usepackage[colorlinks=true]{hyperref}
+
+% \usepackage[]{showframe}
+
+\pagestyle{empty}
+
+\hoffset=0.0in
+\voffset=0.0in
+
+\textwidth=6.5in
+\textheight=10.0in
+
+\topmargin=-0.5in
+
+\oddsidemargin=0.0in
+\evensidemargin=0.0in
+
+\marginparwidth=0.0in
+\marginparsep=0.0in
+
+\headheight=0pt
+\headsep=0pt 
+
+\newcommand{\sectionheader}[1] {
+\vskip \smallskipamount
+\noindent\rule{3em}{0.4pt}{\Large{\textbf{#1}}}\hrulefill
+\vskip \medskipamount
+}
+
+\newenvironment{myitemize}
+{ \begin{itemize}
+    \setlength{\itemsep}{0em}
+    \setlength{\parskip}{0em}
+    \setlength{\parsep}{0em}
+}
+{ \end{itemize}
+}
+
+\begin{document}
+\centerline{
+  \LARGE\textbf{\VAR{ basic.name }}
+}
+
+%% set count=basic|length-1
+%% if count > 0:
+\vskip \medskipamount
+    %% if count == 1:
+\noindent\begin{tabu*} to \textwidth { @{} X[1,c] }
+    %% elif count == 2:
+\noindent\begin{tabu*} to \textwidth { @{} X[1,c] X[1,l] }
+    %% elif count == 3:
+\noindent\begin{tabu*} to \textwidth { @{} X[1,l] X[1,c] X[1,r] }
+    %% endif
+
+    %% if "contact" in basic and basic.contact|length > 0:
+        %% if "email" in basic.contact:
+    \faIcon{envelope} \href{mailto:\VAR{ basic.contact.email }}{\VAR{ basic.contact.email }}\par
+        %% endif
+        %% if "phone" in basic.contact:
+    \faIcon{phone-square-alt} \href{tel:\VAR{ basic.contact.phone }}{\VAR{ basic.contact.phone }}\par
+        %% endif
+        %% if "address" in basic or "websites" in basic:
+    &
+        %% endif
+    %% endif
+    %% if "address" in basic:
+    \faIcon{map-marker-alt}\BLOCK{ for line in basic.address } \VAR{ line }\par\BLOCK{ endfor }
+        %% if "websites" in basic:
+    &
+        %% endif
+    %% endif
+    %% if "websites" in basic and basic.websites|length > 0:
+        %% for website in basic.websites
+    \noindent\BLOCK{ if "icon" in website }\faIcon{\VAR{ website.icon }} \BLOCK{ endif }\href{\VAR{ website.url }} {\VAR{ website.text }}\par
+        %% endfor
+    %% endif
+\end{tabu*}
+%% endif
+
+%#
+%% if summary is defined:
+\sectionheader{}
+\VAR{ summary }
+\medskip
+%% endif
+
+%#
+%% if experiences is defined:
+\sectionheader{Experience}
+    %% for job in experiences:
+\noindent{\large{\textbf{\VAR{ job.company }}}}\par
+\smallskip
+%#
+        %% if "titles" in job and job.titles|length > 0:
+\noindent{}\begin{tabu} to \textwidth {@{} X[4,l] X[1,r]}
+            %% for title in job.titles:
+                %% if "name" in title:
+        \hspace{1.5em}\textit{\VAR{ title.name }}
+                %% endif
+    \ &
+                %% if "startdate" in title:
+        {\VAR{ title.startdate } - \BLOCK{ if "enddate" in title }\VAR{ title.enddate }\BLOCK{ endif }}
+                %% endif
+        \\ 
+                
+            %% endfor
+\end{tabu}
+        %% endif
+        %% if "highlights" in job and job.highlights|length > 0:
+\begin{myitemize}
+            %% for highlight in job.highlights:
+    \item \VAR{ highlight }
+             %% endfor
+\end{myitemize}
+        %% endif
+\medskip
+%#
+    %% endfor
+%% endif
+
+%#
+%% if projects is defined:
+\sectionheader{Projects}
+\begin{myitemize}
+    %% for project in projects:
+\item \VAR{ project }
+     %% endfor
+\end{myitemize}
+%% endif
+
+%#
+%% if education is defined 
+\sectionheader{Education}
+    %% for school in education:
+\noindent{\large{\textbf{\VAR{ school.school }}}}\par
+\smallskip
+%#
+        %% if "degrees" in school and school.degrees|length > 0:
+\noindent{}\begin{tabu} to \textwidth {@{} X[2,l] X[7,l]}
+            %% for degree in school.degrees:
+                %% if "startdate" in degree:
+        \hspace{1.5em}{\VAR{ degree.startdate } - \BLOCK{ if "enddate" in degree }\VAR{ degree.enddate }\BLOCK{ endif }}
+                %% endif
+                %% for name in degree.names:
+    \ &\textit{\VAR{ name }} \\
+                %% endfor
+                %% if "gpa" in degree:
+    \ &\hspace{1.5em}GPA: \VAR{ degree.gpa } \\
+                %% endif
+            %% endfor
+        %% endif
+        %% if "achievements" in school and school.achievements|length > 0:
+    \smallskip \\
+    \hspace{1.5em}Achievements
+            %% for achievement in school.achievements:
+    \ &\VAR{achievement} \\
+             %% endfor
+        %% endif
+\end{tabu}
+\medskip
+%#
+    %% endfor
+%% endif
+
+%#
+%% if (skills is defined and skills|length > 0):
+\sectionheader{Skills}
+\noindent\begin{tabu} to \textwidth { @{} X[1,l] X[5,p] }
+    %% for category in skills:
+    \VAR{ category.category } & \VAR{ category.skills|join(', ') } \\
+    %% endfor
+\end{tabu}
+%% endif
+%#
+\end{document}
+%#

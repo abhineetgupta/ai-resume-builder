@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  ai-resume-builder:
+    build: .
+    image: abhineetgupta/ai_resume_notebook
+    container_name: resume_nb_container
+    user: root  # needed to change NB_USER
+    working_dir: "/home/${NB_USER}/work"
+    environment:
+      - NB_USER=${NB_USER}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - CHOWN_HOME=yes # needed to change NB_USER
+    ports:
+      - 8888:${NB_PORT}
+    volumes:
+      - "${CODE_DIR}:/home/${NB_USER}/work"
+    command: ["start-notebook.sh",
+              "--NotebookApp.token='${NB_TOKEN}'",
+              "--NotebookApp.password='${NB_PASSWORD}'"
+              ]
+
+# docker-compose up --build -d
