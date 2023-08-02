@@ -85,9 +85,9 @@ class Job_Description(BaseModel):
         ...,
         description="The last date until when job applications will be accepted. Date should be null if it's not known.",
     )
-    seattle_salary: str = Field(
+    salary: str = Field(
         ...,
-        description="Salary amount or range. If salary for Seattle is available, use that. Salary should be null if it's not known.",
+        description="Salary amount or range. Salary should be null if it's not known.",
     )
     duties: List[str] = Field(
         ...,

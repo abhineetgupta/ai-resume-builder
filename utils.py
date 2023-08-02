@@ -15,12 +15,21 @@ logger = logging.getLogger(__name__)
 yaml = YAML()
 
 
-def read_yaml(filename: str) -> dict:
+def read_yaml(yaml_text: str = "", filename: str = "") -> dict:
+    if not yaml_text and not filename:
+        logger.warning("Neither yaml text nor filename have been provided.")
+        return None
+    if yaml_text:
+        try:
+            return yaml.load(yaml_text)
+        except YAMLError as e:
+            logger.error(f"The text could not be read.")
+            raise e
     with open(filename, "r") as stream:
         try:
             return yaml.load(stream)
         except YAMLError as e:
-            logger.message(f"The {filename} could not be read.")
+            logger.error(f"The {filename} could not be read.")
             raise e
         except Exception as e:
             logger.error(
@@ -34,7 +43,7 @@ def read_jobfile(filename: str) -> str:
         try:
             return stream.read()
         except OSError as e:
-            logger.message(f"The {filename} could not be read.")
+            logger.error(f"The {filename} could not be read.")
             raise e
 
 
@@ -45,7 +54,7 @@ def write_yaml(d: dict, filename: str = None) -> str:
             try:
                 yaml.dump(d, stream)
             except YAMLError as e:
-                logger.message(f"The {filename} could not be written.")
+                logger.error(f"The {filename} could not be written.")
                 raise e
             except Exception as e:
                 logger.error(
@@ -87,7 +96,7 @@ def generate_pdf(yaml_file: str, template_file: str = None) -> str:
     filename, ext = os.path.splitext(basename)
     filename = os.path.join(dirname, filename)
 
-    yaml_data = read_yaml(yaml_file)
+    yaml_data = read_yaml(filename=yaml_file)
 
     # Set up jinja environment and template
     env = Environment(
@@ -106,7 +115,7 @@ def generate_pdf(yaml_file: str, template_file: str = None) -> str:
     )
     template = env.get_template(template_file)
 
-    yaml_data = read_yaml(yaml_file)
+    yaml_data = read_yaml(filename=yaml_file)
     latex_string = template.render(**yaml_data)
 
     with open(f"{filename}.tex", "wt") as stream:
