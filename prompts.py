@@ -250,35 +250,34 @@ class Resume_Builder:
         prompt_msgs = [
             SystemMessage(
                 content=(
-                    "You are an expert Resume Writer proficient in revising a section into key bullet points that directly address the requirements in the job posting. You strictly follow the provided steps."
+                    "You are an expert Resume Writer proficient in rephrasing text into key bullet points. You strictly follow the provided steps."
                 )
             ),
             HumanMessage(
                 content=(
-                    "Your goal is to read and understand a job posting, and then condense and re-phrase the provided Resume text into a few bullet points that demonstrate my expertise and relevance for the job."
+                    "Your goal is to condense and rephrase the provided Resume input into a few bullet points that demonstrate my expertise and relevance based on the provided job posting."
                 )
             ),
             HumanMessage(
                 content=(
                     "\nWe will follow the following steps:"
                     "\nStep 1: I will give you a job posting."
-                    "\nStep 2: Then I will give you input text from my Resume."
-                    "\nStep 3: You must condense and rephrase the Resume input from Step 2 into key bullet points that meet the following criteria:"
-                    "\n    Criterion 1: Each bullet point must demonstrate my expertise and skills for the job posting."
-                    "\n    Criterion 2: Each bullet point must be written such that there is a direct link from it to the duties, experience, and skill requirements mentioned in the job posting. It must include language and keywords from the job posting."
-                    "\n    Criterion 3: Use action verbs. Give tangible and concrete examples, and include success metrics when available."
-                    "\n    Criterion 4: Find keywords such as leader, teamplayer, expert, etc. from the job posting. In each bullet point, include these words to describe my skills and experience such that that it makes me stand out from other candidates applying to this job."
-                    "\n    Criterion 5: Do not provide specific names of people or companies from my Resume input. Instead focus on what I accomplished and write about how my experience would allow me to excel at the job."
-                    f"\n    Criterion 6: You must limit to no more than {self.MAX_SECTION_ITEMS} bullet points."
-                    "\nStep 4: Finally you must rate the relevance of each bullet point to the job posting between 1 and 5."
+                    "\nStep 2: Then I will give you input from my Resume."
+                    "\nStep 3: You must condense and rephrase my Resume input from Step 2 into key bullet points that meet the following criteria:"
+                    "\n    - Each bullet point must be written to match my input with the duties, experience, and skill requirements mentioned in the job posting provided in Step 1."
+                    "\n    - Use action verbs. Give tangible and concrete examples, and include success metrics when available."
+                    "\n    - Find qualities such as leader, teamplayer, expert, etc. in the job posting. In each bullet point, incorporate some of these words that you found."
+                    "\n    - Grammar, spellings, and sentence structure must be correct."
+                    f"\n    - You must limit to no more than the most relevant {self.MAX_SECTION_ITEMS} bullet points."
+                    "\nStep 4:  You will rate the relevance of each bullet point to the job posting between 1 and 5."
                 )
             ),
             HumanMessage(content=("Let us begin...")),
             HumanMessage(
-                content="Step 1: I am providing the job posting, which includes four sections about the job - <Duties>, <Experience requirements>,  <Technical skills>, and <Non-technical skills>. The entire job posting is enclosed in three backticks:"
+                content="Step 1: I am providing the job posting, which includes four sections about the job - <Duties>, <Experience requirements>, <Technical skills>, <Non-technical skills>. The entire job posting is enclosed in three backticks:"
             ),
             HumanMessagePromptTemplate.from_template(
-                "``` Job Posting:\n"
+                "```\nJob Posting:"
                 "\n<Duties>\n{duties}\n"
                 "\n<Experience requirements>\n{skill_and_experience_requirements}\n"
                 "\n<Technical skills>\n{technical_skill_requirements}\n"
@@ -286,13 +285,13 @@ class Resume_Builder:
                 "```"
             ),
             HumanMessage(
-                content="Step 2: I am providing input from my Resume that could include the tasks that I completed, and any feedback that I received from my manager and peers. It is enclosed in four backticks:"
+                content="Step 2: I am providing a section from my Resume as the input for you to rephrase. It is enclosed in four backticks:"
             ),
             HumanMessagePromptTemplate.from_template(
-                "```` Section from my Resume:\n{section}\n````"
+                "````\nSection from my Resume:\n{section}\n````"
             ),
             HumanMessage(
-                content="Now complete the rest of the steps, starting at Step 3."
+                content="You must now complete the rest of the steps, starting at Step 3."
             ),
             HumanMessage(
                 content="Tips: Make sure to answer in the correct format, match all listed criteria, and stick to any word or item limits."
@@ -326,25 +325,25 @@ class Resume_Builder:
             ),
             HumanMessage(content=("Let us begin...")),
             HumanMessage(
-                content="Step 1: I am providing the job posting, which includes two sections about the job - <Technical skills> and <Non-technical skills>. The entire job posting is enclosed in three backticks:"
+                content="Step 1: I am providing the job posting, which includes two sections about the job - <Technical skills>, <Non-technical skills>. The entire job posting is enclosed in three backticks:"
             ),
             HumanMessagePromptTemplate.from_template(
-                "``` Job Posting:"
+                "```\nJob Posting:"
                 "\n<Technical skills>\n{technical_skill_requirements}\n"
                 "\n<Non-technical skills>\n{soft_skill_requirements}\n"
                 "```"
             ),
             HumanMessage(
-                content="Step 2: I am providing my Resume, which includes two sections: <My Work Experience> and <My Projects>. My entire Resume is enclosed in four backticks:"
+                content="Step 2: I am providing my Resume, which includes two sections: <My Work Experience>, <My Projects>. My entire Resume is enclosed in four backticks:"
             ),
             HumanMessagePromptTemplate.from_template(
-                "```` My Resume:"
+                "````\nMy Resume:"
                 "\n<My Work Experience>\n{experiences}\n"
                 "\n<My Projects>\n{projects}\n"
                 "````"
             ),
             HumanMessage(
-                content="Now complete the rest of the steps starting at Step 3, including any sub-steps."
+                content="You must now complete the rest of the steps starting at Step 3, including any sub-steps."
             ),
             HumanMessage(
                 content="Tips: Make sure to answer in the correct format and  and stick to any word or item limits."
@@ -383,10 +382,10 @@ class Resume_Builder:
             ),
             HumanMessage(content=("Let us begin...")),
             HumanMessage(
-                content="Step 1: I am providing the job posting, which includes two sections about the job - <Duties> and <Experience requirements>. The entire job posting is enclosed in three backticks:"
+                content="Step 1: I am providing the job posting, which includes two sections about the job - <Duties>, <Experience requirements>. The entire job posting is enclosed in three backticks:"
             ),
             HumanMessagePromptTemplate.from_template(
-                "``` Job Posting:"
+                "```\nJob Posting:"
                 "\n<Duties>\n{duties}\n"
                 "\n<Experience requirements>\n{skill_and_experience_requirements}\n"
                 "```"
@@ -395,7 +394,7 @@ class Resume_Builder:
                 content="Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, and <My Skills>. My entire Resume is enclosed in four backticks:"
             ),
             HumanMessagePromptTemplate.from_template(
-                "```` My Resume:"
+                "````\nMy Resume:"
                 "\n<My Education Degrees>\n{degrees}\n"
                 "\n<My Work Experience>\n{experiences}\n"
                 "\n<My Projects>\n{projects}\n"
@@ -403,7 +402,7 @@ class Resume_Builder:
                 "````"
             ),
             HumanMessage(
-                content="Now complete the rest of the steps starting at Step 3, including any sub-steps."
+                content="You must now complete the rest of the steps starting at Step 3, including any sub-steps."
             ),
             HumanMessage(
                 content="Tips: Make sure to answer in the correct format, and stick to any word or item limits."
@@ -425,7 +424,7 @@ class Resume_Builder:
             ),
             HumanMessage(
                 content=(
-                    "Your goal is to read and understand both a job posting and my Resume, and summarize the Resume for applying to the job."
+                    "Your goal is to read and understand both a job posting and my Resume, and summarize my Resume according to the job posting."
                 )
             ),
             HumanMessage(
@@ -434,12 +433,13 @@ class Resume_Builder:
                     "\nStep 1: I will give you a job posting."
                     "\nStep 2: Then I will give you my Resume."
                     "\nStep 3: You must summarize my Resume from Step 2 into a short paragraph that highlights my accomplishments, relevant skills, experience, "
-                    "expertise, and other credentials that demonstrate how I am the most suitable candidate to apply for the job. "
+                    "expertise, and other credentials that demonstrate how I am the most suitable candidate to apply for the job posting from Step 1. "
                     "The Summary must not exceed 80 words. I am providing below some examples to familiarize you with the writing style:"
-                    # "\nSummary Example:"
-                    # "\nAccomplished and enthusiastic teacher with 8+ years of experience in elementary and middle schools. Versatile background includes teaching history, geography, English, and social studies while supporting student growth and development using age-appropriate learning tools. Calm and flexible attitude creates an atmosphere that encourages student learning, innovation, and imagination. Recognized for fostering inclusive classrooms where all students are welcomed and supported."
                     "\nSummary Example:"
-                    "\nTechnical project manager with over seven years of experience managing both agile and waterfall projects for large technology organizations. Key strengths include budget management, contract and vendor relations, client-facing communications, stakeholder awareness, and cross-functional team management. Excellent leadership, organization, and communication skills, with special experience bridging large teams and providing process in the face of ambiguity."
+                    "\nTechnical project manager with over seven years of experience managing both agile and waterfall projects for large technology organizations. "
+                    "Key strengths include budget management, contract and vendor relations, client-facing communications, stakeholder awareness, and cross-functional "
+                    "team management. Excellent leadership, organization, and communication skills, with special experience bridging large teams and providing process "
+                    "in the face of ambiguity."
                 )
             ),
             HumanMessage(content=("Let us begin...")),
@@ -447,13 +447,13 @@ class Resume_Builder:
                 content="Step 1: I am providing a summary of the job posting, enclosed in three backticks:"
             ),
             HumanMessagePromptTemplate.from_template(
-                "``` Job Posting: {job_summary} ```"
+                "```\nJob Posting: {job_summary}```"
             ),
             HumanMessage(
-                content="Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, and <My Skills>. My entire Resume is enclosed in four backticks:"
+                content="Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, <My Skills>. My entire Resume is enclosed in four backticks:"
             ),
             HumanMessagePromptTemplate.from_template(
-                "```` My Resume:"
+                "````\nMy Resume:"
                 "\n<My Education Degrees>\n{degrees}\n"
                 "\n<My Work Experience>\n{experiences}\n"
                 "\n<My Projects>\n{projects}\n"
@@ -461,7 +461,7 @@ class Resume_Builder:
                 "````"
             ),
             HumanMessage(
-                content="Now complete the rest of the steps starting at Step 3."
+                content="You must now complete the rest of the steps starting at Step 3."
             ),
             HumanMessage(
                 content="Tips: Make sure to answer in the correct format, and stick to any word or item limits."
