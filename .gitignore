@@ -1,6 +1,10 @@
 # Personal Directory for Resume files
 my_*/
 
+# IDE and similar local files
+.vscode/
+wandb/
+
 # OS files
 *.DS_Store
 
