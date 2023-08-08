@@ -3,9 +3,11 @@ import os
 from datetime import date, datetime
 from typing import Callable, List
 
+import langchain
 from dateutil import parser as dateparser
 from dateutil.relativedelta import relativedelta
 from langchain import LLMChain
+from langchain.cache import InMemoryCache
 from langchain.chains.openai_functions import create_structured_output_chain
 from langchain.chat_models import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
@@ -25,6 +27,9 @@ if "OPENAI_API_KEY" not in os.environ:
     )
     prompt = "Enter your OpenAI API key:"
     os.environ["OPENAI_API_KEY"] = input(prompt)
+
+# Set up LLM cache
+langchain.llm_cache = InMemoryCache()
 
 
 def create_llm(**kwargs):
@@ -129,12 +134,27 @@ class Resume_List(BaseModel):
 
 # Pydantic class that defines a list of improvements to be returned by the LLM
 class Resume_Improvements(BaseModel):
-    # missing_requirements: List[str] = Field(
-    #     ...,
-    #     description="List of missing education, experience or skills"
-    # )
+    missing_requirements: List[str] = Field(
+        ..., description="List of missing education, experience or skills"
+    )
     improvements: List[str] = Field(
         ..., description="List of suggestions for improvement"
+    )
+
+
+# Pydantic class that defines language error and fix to be returned by the LLM
+class Language_Fix(BaseModel):
+    error: str = Field(
+        ...,
+        description="One language error, for example, spelling, grammar, or punctuation error",
+    )
+    fix: str = Field(..., description="Suggestion to fix the error")
+
+
+# Pydantic class that defines a list of errors and improvements to be returned by the LLM
+class Language_Improvements(BaseModel):
+    fixes: List[Language_Fix] = Field(
+        ..., description="List of language errors and their fixes"
     )
 
 
@@ -222,7 +242,7 @@ class Resume_Builder:
         **llm_kwargs,
     ):
         # Constants
-        self.MAX_SECTION_ITEMS = 5
+        self.MAX_SECTION_ITEMS = 7
 
         self.raw = raw_resume
         self.job_post = job_post
@@ -250,7 +270,7 @@ class Resume_Builder:
         prompt_msgs = [
             SystemMessage(
                 content=(
-                    "You are an expert Resume Writer proficient in rephrasing text into key bullet points. You strictly follow the provided steps."
+                    "You are an expert Resume Writer proficient in rephrasing text into key bullet points. You strictly follow all the provided steps in order."
                 )
             ),
             HumanMessage(
@@ -260,41 +280,38 @@ class Resume_Builder:
             ),
             HumanMessage(
                 content=(
-                    "\nWe will follow the following steps:"
+                    "\nExecute all the steps internally. Generate output for only those steps that begin with <Final Answer>. The steps to follow are:"
                     "\nStep 1: I will give you a job posting."
                     "\nStep 2: Then I will give you input from my Resume."
                     "\nStep 3: You must condense and rephrase my Resume input from Step 2 into key bullet points that meet the following criteria:"
                     "\n    - Each bullet point must be written to match my input with the duties, experience, and skill requirements mentioned in the job posting provided in Step 1."
                     "\n    - Use action verbs. Give tangible and concrete examples, and include success metrics when available."
                     "\n    - Find qualities such as leader, teamplayer, expert, etc. in the job posting. In each bullet point, incorporate some of these words that you found."
+                    "\n    - Each bullet point must must have more than 40 words and can include multiple sentences."
                     "\n    - Grammar, spellings, and sentence structure must be correct."
                     f"\n    - You must limit to no more than the most relevant {self.MAX_SECTION_ITEMS} bullet points."
-                    "\nStep 4:  You will rate the relevance of each bullet point to the job posting between 1 and 5."
+                    "\nStep 4: You must review and revise each bullet point to ensure all the above listed criteria are strictly met."
+                    "\nStep 5: You will rate the relevance of each bullet point to the job posting between 1 and 5."
+                    "\nStep 6: <Final Answer> Output the bullet points and their relevance from Steps 4 and 5."
                 )
             ),
             HumanMessage(content=("Let us begin...")),
-            HumanMessage(
-                content="Step 1: I am providing the job posting, which includes four sections about the job - <Duties>, <Experience requirements>, <Technical skills>, <Non-technical skills>. The entire job posting is enclosed in three backticks:"
-            ),
             HumanMessagePromptTemplate.from_template(
-                "```\nJob Posting:"
+                "Step 1: I am providing the job posting, which includes four sections about the job - <Duties>, <Experience requirements>, <Technical skills>, <Non-technical skills>. The entire job posting is enclosed in three backticks:"
+                "\n```\nJob Posting:"
                 "\n<Duties>\n{duties}\n"
                 "\n<Experience requirements>\n{skill_and_experience_requirements}\n"
                 "\n<Technical skills>\n{technical_skill_requirements}\n"
                 "\n<Non-technical skills>\n{soft_skill_requirements}\n"
                 "```"
             ),
-            HumanMessage(
-                content="Step 2: I am providing a section from my Resume as the input for you to rephrase. It is enclosed in four backticks:"
-            ),
             HumanMessagePromptTemplate.from_template(
-                "````\nSection from my Resume:\n{section}\n````"
+                "Step 2: I am providing a section from my Resume as the input for you to rephrase. It is enclosed in four backticks:"
+                "\n````\nSection from my Resume:\n{section}\n````"
             ),
             HumanMessage(
                 content="You must now complete the rest of the steps, starting at Step 3."
-            ),
-            HumanMessage(
-                content="Tips: Make sure to answer in the correct format, match all listed criteria, and stick to any word or item limits."
+                "\nTips: Make sure to answer in the correct format, match all listed criteria, and stick to any word or item limits."
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
@@ -306,7 +323,7 @@ class Resume_Builder:
         prompt_msgs = [
             SystemMessage(
                 content=(
-                    "You are an expert Resume Reviewer proficient in extracting information a Resume. You strictly follow the provided steps."
+                    "You are an expert Resume Reviewer proficient in extracting information a Resume. You strictly follow all the provided steps in order."
                 )
             ),
             HumanMessage(
@@ -319,34 +336,28 @@ class Resume_Builder:
                     "\nWe will follow the following steps:"
                     "\nStep 1: I will give you the job posting."
                     "\nStep 2: Then I will give you my Resume."
-                    "\nStep 3: You must extract a list of Technical Skills from my Resume in Step 2 that match the skills in the job posting from Step 1. Limit this list to the 10 most relevant Software Skills."
+                    "\nStep 3: You must extract a list of Technical Skills from my Resume in Step 2 that match the skills in the job posting from Step 1."
                     "\nStep 4: You must extract a list of non-technical Soft Skills from my Resume in Step 2 that match the non-technical soft skills in the job posting from Step 1. Limit this list to the 10 most relevant Soft Skills."
                 )
             ),
             HumanMessage(content=("Let us begin...")),
-            HumanMessage(
-                content="Step 1: I am providing the job posting, which includes two sections about the job - <Technical skills>, <Non-technical skills>. The entire job posting is enclosed in three backticks:"
-            ),
             HumanMessagePromptTemplate.from_template(
-                "```\nJob Posting:"
+                "Step 1: I am providing the job posting, which includes two sections about the job - <Technical skills>, <Non-technical skills>. The entire job posting is enclosed in three backticks:"
+                "\n```\nJob Posting:"
                 "\n<Technical skills>\n{technical_skill_requirements}\n"
                 "\n<Non-technical skills>\n{soft_skill_requirements}\n"
                 "```"
             ),
-            HumanMessage(
-                content="Step 2: I am providing my Resume, which includes two sections: <My Work Experience>, <My Projects>. My entire Resume is enclosed in four backticks:"
-            ),
             HumanMessagePromptTemplate.from_template(
-                "````\nMy Resume:"
+                "Step 2: I am providing my Resume, which includes two sections: <My Work Experience>, <My Projects>. My entire Resume is enclosed in four backticks:"
+                "\n````\nMy Resume:"
                 "\n<My Work Experience>\n{experiences}\n"
                 "\n<My Projects>\n{projects}\n"
                 "````"
             ),
             HumanMessage(
                 content="You must now complete the rest of the steps starting at Step 3, including any sub-steps."
-            ),
-            HumanMessage(
-                content="Tips: Make sure to answer in the correct format and  and stick to any word or item limits."
+                "\nTips: Make sure to answer in the correct format and  and stick to any word or item limits."
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
@@ -360,7 +371,7 @@ class Resume_Builder:
         prompt_msgs = [
             SystemMessage(
                 content=(
-                    "You are an expert Resume Reviewer proficient in making suggestions for improvements to a Resume. You strictly follow the provided steps."
+                    "You are an expert Resume Reviewer proficient in making suggestions for improvements to a Resume. You strictly follow all the provided steps in order."
                 )
             ),
             HumanMessage(
@@ -370,31 +381,25 @@ class Resume_Builder:
             ),
             HumanMessage(
                 content=(
-                    "\nWe will follow the following steps:"
+                    "\nExecute all the steps internally. Generate output for only those steps that begin with <Final Answer>. The steps to follow are:"
                     "\nStep 1: I will give you a job posting."
                     "\nStep 2: Then I will give you my Resume."
-                    "\nStep 3: You must create an internal list of those requirements from the job posting from Step 1 that are NOT present in my Resume from Step 2. Follow these sub-steps:"
-                    "\n   Sub-Step 3a: Identify an internal list of those requirements from the job posting that are NOT present in my Resume."
-                    "\n   Sub-Step 3b: For each missing requirement that you identified in Sub-Step 3a, check again whether that requirement is in fact present in my Resume. Note that a requirement may be present in my Resume in a different phrasing than in the job posting. If the requirement is present in my Resume, remove it from your list of missing requirements."
-                    "\n   Sub-Step 3c: Sub-steps are complete. Move to the next Step."
-                    "\nStep 4: You must finally create a list of suggestions for improving my Resume based on the final list of missing requirements from the previous step, and the job posting."
+                    "\nStep 3: Identify a list of those requirements from the job posting that are NOT present in my Resume."
+                    "\nStep 4: For each missing requirement that you identified in Step 3, check again whether that requirement is in fact present in my Resume. Note that a requirement may be present in my Resume in a different phrasing than in the job posting. If the requirement is present in my Resume, remove it from your list of missing requirements."
+                    "\nStep 5: <Final Answer> Output the final list of suggestions from Step 4."
                 )
             ),
             HumanMessage(content=("Let us begin...")),
-            HumanMessage(
-                content="Step 1: I am providing the job posting, which includes two sections about the job - <Duties>, <Experience requirements>. The entire job posting is enclosed in three backticks:"
-            ),
             HumanMessagePromptTemplate.from_template(
-                "```\nJob Posting:"
+                "Step 1: I am providing the job posting, which includes two sections about the job - <Duties>, <Experience requirements>. The entire job posting is enclosed in three backticks:"
+                "\n```\nJob Posting:"
                 "\n<Duties>\n{duties}\n"
                 "\n<Experience requirements>\n{skill_and_experience_requirements}\n"
                 "```"
             ),
-            HumanMessage(
-                content="Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, and <My Skills>. My entire Resume is enclosed in four backticks:"
-            ),
             HumanMessagePromptTemplate.from_template(
-                "````\nMy Resume:"
+                "Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, <My Skills>. My entire Resume is enclosed in four backticks:"
+                "\n````\nMy Resume:"
                 "\n<My Education Degrees>\n{degrees}\n"
                 "\n<My Work Experience>\n{experiences}\n"
                 "\n<My Projects>\n{projects}\n"
@@ -402,10 +407,8 @@ class Resume_Builder:
                 "````"
             ),
             HumanMessage(
-                content="You must now complete the rest of the steps starting at Step 3, including any sub-steps."
-            ),
-            HumanMessage(
-                content="Tips: Make sure to answer in the correct format, and stick to any word or item limits."
+                content="You must now complete the rest of the steps starting at Step 3."
+                "\nTips: Make sure to answer in the correct format, and stick to any word or item limits."
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
@@ -415,11 +418,44 @@ class Resume_Builder:
             Resume_Improvements, llm, prompt, **chain_kwargs
         )
 
+    def _language_check_chain(self, **chain_kwargs) -> LLMChain:
+        prompt_msgs = [
+            SystemMessage(
+                content=(
+                    "You are an expert in English language arts with advanced experience in proofreading, editing, spelling, grammar, proper sentence structure, and punctuation."
+                )
+            ),
+            HumanMessage(
+                content=(
+                    "Your goal is to carefully read the input to identify any grammatical or spelling errors. "
+                    "You will make appropriate suggestions to fix these errors. "
+                )
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "The input is my Resume, which includes four sections - Education, Experience, Projects, Skills. Find all errors and suggest improvements from the following input:"
+                "\n````\nMy Resume:"
+                "\nEducation\n{degrees}\n"
+                "\nExperience\n{experiences}\n"
+                "\nProjects\n{projects}\n"
+                "\nSkills\n{skills}\n"
+                "````"
+            ),
+            HumanMessage(
+                content="Tips: Make sure to answer in the correct format. Limit the list to the first 20 errors."
+            ),
+        ]
+        prompt = ChatPromptTemplate(messages=prompt_msgs)
+
+        llm = create_llm(**self.llm_kwargs)
+        return create_structured_output_chain(
+            Language_Improvements, llm, prompt, **chain_kwargs
+        )
+
     def _summary_writer_chain(self, **chain_kwargs) -> LLMChain:
         prompt_msgs = [
             SystemMessage(
                 content=(
-                    "You are an expert Resume Writer proficient in summarizing a resume based on a job posting. You strictly follow the provided steps."
+                    "You are an expert Resume Writer proficient in summarizing a resume based on a job posting. You strictly follow all the provided steps in order."
                 )
             ),
             HumanMessage(
@@ -443,17 +479,13 @@ class Resume_Builder:
                 )
             ),
             HumanMessage(content=("Let us begin...")),
-            HumanMessage(
-                content="Step 1: I am providing a summary of the job posting, enclosed in three backticks:"
+            HumanMessagePromptTemplate.from_template(
+                "Step 1: I am providing a summary of the job posting, enclosed in three backticks:"
+                "\n```\nJob Posting: {job_summary}```"
             ),
             HumanMessagePromptTemplate.from_template(
-                "```\nJob Posting: {job_summary}```"
-            ),
-            HumanMessage(
-                content="Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, <My Skills>. My entire Resume is enclosed in four backticks:"
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "````\nMy Resume:"
+                "Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, <My Skills>. My entire Resume is enclosed in four backticks:"
+                "\n````\nMy Resume:"
                 "\n<My Education Degrees>\n{degrees}\n"
                 "\n<My Work Experience>\n{experiences}\n"
                 "\n<My Projects>\n{projects}\n"
@@ -462,9 +494,7 @@ class Resume_Builder:
             ),
             HumanMessage(
                 content="You must now complete the rest of the steps starting at Step 3."
-            ),
-            HumanMessage(
-                content="Tips: Make sure to answer in the correct format, and stick to any word or item limits."
+                "\nTips: Make sure to answer in the correct format, and stick to any word or item limits."
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
@@ -604,8 +634,24 @@ class Resume_Builder:
             experiences=self._format_experiences_for_prompt(),
             skills=self._format_skills_for_prompt(self.skills),
         )
+        improvements = chain.predict(**chain_inputs).dict()["improvements"]
 
-        return chain.predict(**chain_inputs).dict()["improvements"]
+        chain = self._language_check_chain(**chain_kwargs)
+        chain_inputs = format_prompt_inputs_as_strings(
+            prompt_inputs=chain.prompt.input_variables,
+            **self.job_post.parsed_job,
+            degrees=self.degrees,
+            projects=self.projects,
+            experiences=self._format_experiences_for_prompt(),
+            skills=self._format_skills_for_prompt(self.skills),
+        )
+        language_fixes = chain.predict(**chain_inputs).dict()
+        language_fixes = [
+            f"{fix['error']} -> {fix['fix']}" for fix in language_fixes["fixes"]
+        ]
+        improvements.append({"Language improvements": language_fixes})
+
+        return improvements
 
     def create_summary(self, **chain_kwargs) -> dict:
         chain = self._summary_writer_chain(**chain_kwargs)
