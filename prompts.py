@@ -7,7 +7,7 @@ import langchain
 from dateutil import parser as dateparser
 from dateutil.relativedelta import relativedelta
 from langchain import LLMChain
-from langchain.cache import InMemoryCache
+from langchain.cache import SQLiteCache
 from langchain.chains.openai_functions import create_structured_output_chain
 from langchain.chat_models import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
@@ -29,7 +29,7 @@ if "OPENAI_API_KEY" not in os.environ:
     os.environ["OPENAI_API_KEY"] = input(prompt)
 
 # Set up LLM cache
-langchain.llm_cache = InMemoryCache()
+langchain.llm_cache = SQLiteCache(database_path=".langchain.db")
 
 
 def create_llm(**kwargs):
@@ -134,9 +134,6 @@ class Resume_List(BaseModel):
 
 # Pydantic class that defines a list of improvements to be returned by the LLM
 class Resume_Improvements(BaseModel):
-    missing_requirements: List[str] = Field(
-        ..., description="List of missing education, experience or skills"
-    )
     improvements: List[str] = Field(
         ..., description="List of suggestions for improvement"
     )
@@ -292,7 +289,7 @@ class Resume_Builder:
                     f"\n    - You must limit to no more than the most relevant {self.MAX_SECTION_ITEMS} bullet points."
                     "\nStep 4: You must review and revise each bullet point to ensure all the above listed criteria are strictly met."
                     "\nStep 5: You will rate the relevance of each bullet point to the job posting between 1 and 5."
-                    "\nStep 6: <Final Answer> Output the bullet points and their relevance from Steps 4 and 5."
+                    "\nStep 6: <Final Answer> You must output the bullet points and their relevance from Step 4 and Step 5."
                 )
             ),
             HumanMessage(content=("Let us begin...")),
@@ -386,7 +383,7 @@ class Resume_Builder:
                     "\nStep 2: Then I will give you my Resume."
                     "\nStep 3: Identify a list of those requirements from the job posting that are NOT present in my Resume."
                     "\nStep 4: For each missing requirement that you identified in Step 3, check again whether that requirement is in fact present in my Resume. Note that a requirement may be present in my Resume in a different phrasing than in the job posting. If the requirement is present in my Resume, remove it from your list of missing requirements."
-                    "\nStep 5: <Final Answer> Output the final list of suggestions from Step 4."
+                    "\nStep 5: <Final Answer> You must output a list of suggestions for improving my Resume based on the final list of missing requirements from the previous step, and the job posting."
                 )
             ),
             HumanMessage(content=("Let us begin...")),
