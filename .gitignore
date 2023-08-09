@@ -5,6 +5,9 @@ my_*/
 .vscode/
 wandb/
 
+# langchain cache
+.langchain.db
+
 # OS files
 *.DS_Store
 
