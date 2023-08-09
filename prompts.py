@@ -7,7 +7,7 @@ import langchain
 from dateutil import parser as dateparser
 from dateutil.relativedelta import relativedelta
 from langchain import LLMChain
-from langchain.cache import SQLiteCache
+from langchain.cache import InMemoryCache
 from langchain.chains.openai_functions import create_structured_output_chain
 from langchain.chat_models import ChatOpenAI
 from langchain.output_parsers import PydanticOutputParser
@@ -29,7 +29,7 @@ if "OPENAI_API_KEY" not in os.environ:
     os.environ["OPENAI_API_KEY"] = input(prompt)
 
 # Set up LLM cache
-langchain.llm_cache = SQLiteCache(database_path=".langchain.db")
+langchain.llm_cache = InMemoryCache()
 
 
 def create_llm(**kwargs):
@@ -134,9 +134,8 @@ class Resume_List(BaseModel):
 
 # Pydantic class that defines a list of improvements to be returned by the LLM
 class Resume_Improvements(BaseModel):
-    improvements: List[str] = Field(
-        ..., description="List of suggestions for improvement"
-    )
+    missing: List[str] = Field(..., description="List of missing requirements")
+    improvements: List[str] = Field(..., description="List of suggestions")
 
 
 # Pydantic class that defines language error and fix to be returned by the LLM
@@ -235,19 +234,15 @@ class Resume_Builder:
     def __init__(
         self,
         raw_resume: dict,
-        job_post: Job_Post,
+        parsed_job: dict,
         **llm_kwargs,
     ):
         # Constants
         self.MAX_SECTION_ITEMS = 7
 
         self.raw = raw_resume
-        self.job_post = job_post
+        self.parsed_job = parsed_job
         self.llm_kwargs = llm_kwargs
-
-        # parse job post if not already
-        if not self.job_post.parsed_job:
-            _ = self.job_post.parse_job_post()
 
         self.degrees = self._get_degrees(self.raw)
         self.experiences_raw = utils.get_dict_field(
@@ -378,12 +373,11 @@ class Resume_Builder:
             ),
             HumanMessage(
                 content=(
-                    "\nExecute all the steps internally. Generate output for only those steps that begin with <Final Answer>. The steps to follow are:"
+                    "\nWe will follow the following steps:"
                     "\nStep 1: I will give you a job posting."
                     "\nStep 2: Then I will give you my Resume."
-                    "\nStep 3: Identify a list of those requirements from the job posting that are NOT present in my Resume."
-                    "\nStep 4: For each missing requirement that you identified in Step 3, check again whether that requirement is in fact present in my Resume. Note that a requirement may be present in my Resume in a different phrasing than in the job posting. If the requirement is present in my Resume, remove it from your list of missing requirements."
-                    "\nStep 5: <Final Answer> You must output a list of suggestions for improving my Resume based on the final list of missing requirements from the previous step, and the job posting."
+                    "\nStep 3: You must identify a list of those requirements from the job posting that are NOT present in my Resume."
+                    "\nStep 4: Additionally, you must also make suggestions to improve my Resume to address the list of missing requirements from Step 3."
                 )
             ),
             HumanMessage(content=("Let us begin...")),
@@ -405,7 +399,7 @@ class Resume_Builder:
             ),
             HumanMessage(
                 content="You must now complete the rest of the steps starting at Step 3."
-                "\nTips: Make sure to answer in the correct format, and stick to any word or item limits."
+                "\nTips: Make sure to provide all answers, answer in the correct format, and stick to any word or item limits."
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
@@ -571,7 +565,7 @@ class Resume_Builder:
         chain = self._section_rewriter_chain(**chain_kwargs)
         chain_inputs = format_prompt_inputs_as_strings(
             prompt_inputs=chain.prompt.input_variables,
-            **self.job_post.parsed_job,
+            **self.parsed_job,
             section=section,
         )
         section_revised = chain.predict(**chain_inputs).dict()
@@ -600,7 +594,7 @@ class Resume_Builder:
         chain = self._skill_selector_chain(**chain_kwargs)
         chain_inputs = format_prompt_inputs_as_strings(
             prompt_inputs=chain.prompt.input_variables,
-            **self.job_post.parsed_job,
+            **self.parsed_job,
             degrees=self.degrees,
             experiences=self._format_experiences_for_prompt(),
             skills=self._format_skills_for_prompt(self.skills_raw),
@@ -625,7 +619,7 @@ class Resume_Builder:
         chain = self._improver_chain(**chain_kwargs)
         chain_inputs = format_prompt_inputs_as_strings(
             prompt_inputs=chain.prompt.input_variables,
-            **self.job_post.parsed_job,
+            **self.parsed_job,
             degrees=self.degrees,
             projects=self.projects,
             experiences=self._format_experiences_for_prompt(),
@@ -636,7 +630,7 @@ class Resume_Builder:
         chain = self._language_check_chain(**chain_kwargs)
         chain_inputs = format_prompt_inputs_as_strings(
             prompt_inputs=chain.prompt.input_variables,
-            **self.job_post.parsed_job,
+            **self.parsed_job,
             degrees=self.degrees,
             projects=self.projects,
             experiences=self._format_experiences_for_prompt(),
@@ -654,7 +648,7 @@ class Resume_Builder:
         chain = self._summary_writer_chain(**chain_kwargs)
         chain_inputs = format_prompt_inputs_as_strings(
             prompt_inputs=chain.prompt.input_variables,
-            **self.job_post.parsed_job,
+            **self.parsed_job,
             degrees=self.degrees,
             projects=self.projects,
             experiences=self._format_experiences_for_prompt(),
