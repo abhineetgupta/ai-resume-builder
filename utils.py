@@ -6,6 +6,7 @@ import sys
 # import pdflatex
 from jinja2 import Environment, FileSystemLoader
 from ruamel.yaml import YAML
+from ruamel.yaml.compat import StringIO
 from ruamel.yaml.error import YAMLError
 
 # create logger
@@ -47,7 +48,7 @@ def read_jobfile(filename: str) -> str:
             raise e
 
 
-def write_yaml(d: dict, filename: str = None) -> str:
+def write_yaml(d: dict, filename: str = None) -> None:
     yaml.allow_unicode = True
     if filename:
         with open(filename, "wb") as stream:
@@ -62,6 +63,13 @@ def write_yaml(d: dict, filename: str = None) -> str:
                 )
                 raise e
     return yaml.dump(d, sys.stdout)
+
+
+def dict_to_yaml_string(d: dict) -> str:
+    yaml.allow_unicode = True
+    stream = StringIO()
+    yaml.dump(d, stream=stream)
+    return stream.getvalue()
 
 
 def generator_key_in_nested_dict(keys: [str | list], nested: dict):

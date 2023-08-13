@@ -11,6 +11,9 @@ basic:
       url: https://www.guinnessworldrecords.com/world-records/67741-human-computation
       icon: beer
 
+# summary will be overwritten by the LLM. Leave blank.
+summary:
+
 education:
   - school: Self-educated
     degrees:

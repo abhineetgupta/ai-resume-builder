@@ -1,7 +1,7 @@
 import logging
 import os
-from datetime import date, datetime
-from typing import Callable, List
+from datetime import datetime
+from typing import List
 
 import langchain
 from dateutil import parser as dateparser
@@ -10,8 +10,11 @@ from langchain import LLMChain
 from langchain.cache import InMemoryCache
 from langchain.chains.openai_functions import create_structured_output_chain
 from langchain.chat_models import ChatOpenAI
-from langchain.output_parsers import PydanticOutputParser
-from langchain.prompts import ChatPromptTemplate, HumanMessagePromptTemplate
+from langchain.prompts import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+    SystemMessagePromptTemplate,
+)
 from langchain.schema import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
@@ -38,6 +41,9 @@ def create_llm(**kwargs):
     # set default model
     if "model_name" not in kwargs:
         kwargs["model_name"] = "gpt-3.5-turbo"
+    # set default cache to False so reruns generate new outputs
+    if "cache" not in kwargs:
+        kwargs["cache"] = False
     return chat_model(**kwargs)
 
 
@@ -57,7 +63,7 @@ def format_prompt_inputs_as_strings(prompt_inputs: list[str], **kwargs):
 def parse_date(d: str) -> datetime:
     """Given an arbitrary string, parse it to a date"""
     # set default date to January 1 of current year
-    default_date = datetime(date.today().year, 1, 1)
+    default_date = datetime(datetime.today().year, 1, 1)
     try:
         return dateparser.parse(str(d), default=default_date)
     except dateparser._parser.ParserError as e:
@@ -86,101 +92,123 @@ class Job_Description(BaseModel):
     job_summary: str = Field(
         ..., description="Brief summary of the job, not exceeding 100 words"
     )
-    applying_deadline: str = Field(
-        ...,
-        description="The last date until when job applications will be accepted. Date should be null if it's not known.",
-    )
     salary: str = Field(
         ...,
         description="Salary amount or range. Salary should be null if it's not known.",
     )
     duties: List[str] = Field(
         ...,
-        description="The roles, responsibilities and duties of the job as an itemized list, not exceeding 500 words",
+        description="The role, responsibilities and duties of the job as an itemized list, not exceeding 500 words",
     )
-    skill_and_experience_requirements: List[str] = Field(
+    qualifications: List[str] = Field(
         ...,
-        description="The skills and experience required for the job as an itemized list, not exceeding 500 words",
+        description="The qualifications, skills, and experience required for the job as an itemized list, not exceeding 500 words",
     )
     is_fully_remote: bool = Field(
         ...,
-        description="Does the job have an option to work fully (100%) remotely? Hybrid or partial remote is marked as `False`. Fully remote should be null if it's not known.",
+        description="Does the job have an option to work fully (100%) remotely? Hybrid or partial remote is marked as `False`. Use `None` if the answer is not known.",
     )
 
 
 class Job_Skills(BaseModel):
     """Skills from a job posting"""
 
-    technical_skill_requirements: List[str] = Field(
+    technical_skills: List[str] = Field(
         ...,
-        description="An itemized list of technical skills like programming languages and tools",
+        description="An itemized list of technical skills, including programming languages, technologies, and tools. Examples: Python, MS Office, Machine learning, Marketing, Optimization, GPT",
     )
-    soft_skill_requirements: List[str] = Field(
+    non_technical_skills: List[str] = Field(
         ...,
-        description="An itemized list of non-technical Soft skills. Some examples of soft skills are: communication, leadership, adaptability, teamwork, problem solving, critical thinking, time management",
+        description="An itemized list of non-technical Soft skills. Examples: Communication, Leadership, Adaptability, Teamwork, Problem solving, Critical thinking, Time management",
     )
 
 
-# Pydantic class that defines each item to be returned by the LLM
-class Resume_Item(BaseModel):
-    item: str = Field(..., description="Represents one bullet point")
-    relevance: int = Field(..., enum=[1, 2, 3, 4, 5])
-
-
-# Pydantic class that defines a list of bullet items to be returned by the LLM
-class Resume_List(BaseModel):
-    items: List[Resume_Item] = Field(..., description="A list of bullet points")
-
-
-# Pydantic class that defines a list of improvements to be returned by the LLM
-class Resume_Improvements(BaseModel):
-    missing: List[str] = Field(..., description="List of missing requirements")
-    improvements: List[str] = Field(..., description="List of suggestions")
-
-
-# Pydantic class that defines language error and fix to be returned by the LLM
-class Language_Fix(BaseModel):
-    error: str = Field(
-        ...,
-        description="One language error, for example, spelling, grammar, or punctuation error",
+# Pydantic class that defines each highlight to be returned by the LLM
+class Resume_Section_Highlight(BaseModel):
+    highlight: str = Field(..., description="one highlight")
+    relevance: int = Field(
+        ..., description="relevance of the bullet point", enum=[1, 2, 3, 4, 5]
     )
-    fix: str = Field(..., description="Suggestion to fix the error")
 
 
-# Pydantic class that defines a list of errors and improvements to be returned by the LLM
-class Language_Improvements(BaseModel):
-    fixes: List[Language_Fix] = Field(
-        ..., description="List of language errors and their fixes"
+# Pydantic class that defines a list of highlights to be returned by the LLM
+class Resume_Section_Highlighter_Output(BaseModel):
+    plan: List[str] = Field(..., description="itemized <Plan>")
+    additional_steps: List[str] = Field(..., description="itemized <Additional Steps>")
+    work: List[str] = Field(..., description="itemized <Work>")
+    final_answer: List[Resume_Section_Highlight] = Field(
+        ..., description="itemized <Final Answer> in the correct format"
     )
 
 
 # Pydantic class that defines a list of skills to be returned by the LLM
 class Resume_Skills(BaseModel):
-    software_skills: List[str] = Field(
+    technical_skills: List[str] = Field(
         ...,
-        description="An itemized list of technical skills like programming languages and tools",
+        description="An itemized list of technical skills",
     )
-    soft_skills: List[str] = Field(
+    non_technical_skills: List[str] = Field(
         ...,
-        description="An itemized list of non-technical Soft skills. Some examples of soft skills are: communication, leadership, adaptability, teamwork, problem solving, critical thinking, time management",
+        description="An itemized list of non-technical skills",
     )
 
 
-# Pydantic class that defines the summary to be returned by the LLM
-class Resume_Summary(BaseModel):
-    summary: str = Field(
-        ..., description="Summary of the resume as it relates to the job posting"
+# Pydantic class that defines a list of skills to be returned by the LLM
+class Resume_Skills_Matcher_Output(BaseModel):
+    plan: List[str] = Field(..., description="itemized <Plan>")
+    additional_steps: List[str] = Field(..., description="itemized <Additional Steps>")
+    work: List[str] = Field(..., description="itemized <Work>")
+    final_answer: Resume_Skills = Field(
+        ..., description="<Final Answer> in the correct format"
     )
 
 
-class Job_Post:
-    def __init__(self, posting: str, **llm_kwargs):
-        self.posting = posting
-        self.llm_kwargs = llm_kwargs
+class Resume_Summarizer_Output(BaseModel):
+    plan: List[str] = Field(..., description="itemized <Plan>")
+    additional_steps: List[str] = Field(..., description="itemized <Additional Steps>")
+    work: List[str] = Field(..., description="itemized <Work>")
+    final_answer: str = Field(..., description="<Final Answer> in the correct format")
 
-        self.parsed_job = None
 
-    def _parser_chain(self, **chain_kwargs) -> LLMChain:
+# Pydantic class that defines a list of improvements to be returned by the LLM
+class Resume_Improvements(BaseModel):
+    section: str = Field(
+        ...,
+        enum=[
+            "summary",
+            "education",
+            "experience",
+            "projects",
+            "skills",
+            "spelling and grammar",
+            "other",
+        ],
+    )
+    improvements: List[str] = Field(
+        ..., description="itemized list of suggested improvements"
+    )
+
+
+class Resume_Improver_Output(BaseModel):
+    plan: List[str] = Field(..., description="itemized <Plan>")
+    additional_steps: List[str] = Field(..., description="itemized <Additional Steps>")
+    work: List[str] = Field(..., description="itemized <Work>")
+    final_answer: List[Resume_Improvements] = Field(
+        ..., description="<Final Answer> in the correct format"
+    )
+
+
+class Extractor_LLM:
+    def __init__(self):
+        # The extractor LLM is hard-coded to the cheaper gpt3.5 model
+        self.extractor_llm = create_llm(
+            chat_model=ChatOpenAI,
+            model_name="gpt-3.5-turbo",
+            temperature=0.3,
+            cache=True,
+        )
+
+    def _extractor_chain(self, pydantic_object, **chain_kwargs) -> LLMChain:
         prompt_msgs = [
             SystemMessage(
                 content="You are a world class algorithm for extracting information in structured formats."
@@ -189,310 +217,285 @@ class Job_Post:
                 content="Use the given format to extract information from the following input:"
             ),
             HumanMessagePromptTemplate.from_template("{input}"),
-            HumanMessage(
-                content="Tips: Make sure to answer in the correct format and stick to any word or item limits."
-            ),
+            HumanMessage(content="Tips: Make sure to answer in the correct format."),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
 
-        llm = create_llm(**self.llm_kwargs)
         return create_structured_output_chain(
-            Job_Description, llm, prompt, **chain_kwargs
+            pydantic_object, llm=self.extractor_llm, prompt=prompt, **chain_kwargs
         )
 
-    def _skills_extractor_chain(self, **chain_kwargs) -> LLMChain:
-        prompt_msgs = [
-            SystemMessage(
-                content="You are a world class algorithm for extracting information in structured formats."
-            ),
-            HumanMessage(
-                content="Use the given format to extract information from the following input:"
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "Job Posting:\n"
-                "\nThe ideal candidate is able to perform the following duties:\n{duties}\n"
-                "\nThe ideal candidate has the following experience and skills:\n{skill_and_experience_requirements}"
-            ),
-            HumanMessage(
-                content="Tips: Make sure to answer in the correct format and stick to any word or item limits."
-            ),
-        ]
-        prompt = ChatPromptTemplate(messages=prompt_msgs)
+    def extract_from_input(self, pydantic_object, input: str, **chain_kwargs) -> dict:
+        return (
+            self._extractor_chain(pydantic_object=pydantic_object, **chain_kwargs)
+            .predict(input=input)
+            .dict()
+        )
 
-        llm = create_llm(**self.llm_kwargs)
-        return create_structured_output_chain(Job_Skills, llm, prompt, **chain_kwargs)
+
+class Job_Post(Extractor_LLM):
+    def __init__(self, posting: str):
+        super().__init__()
+        self.posting = posting
+        self.parsed_job = None
 
     def parse_job_post(self, **chain_kwargs) -> dict:
-        parsed_job = self._parser_chain(**chain_kwargs).predict(input=self.posting)
-        parsed_job = parsed_job.dict()
-        job_skills = self._skills_extractor_chain(**chain_kwargs).predict(**parsed_job)
-        self.parsed_job = parsed_job | job_skills.dict()
+        parsed_job = self.extract_from_input(
+            pydantic_object=Job_Description, input=self.posting, **chain_kwargs
+        )
+        job_skills = self.extract_from_input(
+            pydantic_object=Job_Skills,
+            input=self.posting,
+            **chain_kwargs,
+        )
+        self.parsed_job = parsed_job | job_skills
         return self.parsed_job
 
 
-class Resume_Builder:
+class Resume_Builder(Extractor_LLM):
     def __init__(
         self,
-        raw_resume: dict,
+        resume: dict,
         parsed_job: dict,
-        **llm_kwargs,
+        is_final: bool = False,
+        llm_kwargs: dict = dict(),
     ):
-        # Constants
-        self.MAX_SECTION_ITEMS = 7
+        super().__init__()
 
-        self.raw = raw_resume
+        self.resume = resume
         self.parsed_job = parsed_job
         self.llm_kwargs = llm_kwargs
 
-        self.degrees = self._get_degrees(self.raw)
-        self.experiences_raw = utils.get_dict_field(
-            field="experiences", resume=self.raw
-        )
-        self.skills_raw = utils.get_dict_field(field="skills", resume=self.raw)
-        self.projects_raw = utils.get_dict_field(field="projects", resume=self.raw)
+        self.degrees = self._get_degrees(self.resume)
+        self.basic_info = utils.get_dict_field(field="basic", resume=self.resume)
+        self.education = utils.get_dict_field(field="education", resume=self.resume)
+        self.projects = utils.get_dict_field(field="projects", resume=self.resume)
+        self.experiences = utils.get_dict_field(field="experiences", resume=self.resume)
+        self.skills = utils.get_dict_field(field="skills", resume=self.resume)
+        self.summary = utils.get_dict_field(field="summary", resume=self.resume)
+        if not is_final:
+            self.experiences_raw = self.experiences
+            self.experiences = None
 
-        self.basic_info = utils.get_dict_field(field="basic", resume=self.raw)
-        self.education = utils.get_dict_field(field="education", resume=self.raw)
-        self.projects = None
-        self.experiences = None
-        self.skills = None
-        self.summary = None
+            self.skills_raw = self.skills
+            self.skills = None
 
-    def _section_rewriter_chain(self, **chain_kwargs) -> LLMChain:
+            self.projects_raw = self.projects
+            self.projects = None
+
+            self.summary_raw = self.summary
+            self.summary = None
+
+    def _section_highlighter_chain(self, **chain_kwargs) -> LLMChain:
         prompt_msgs = [
             SystemMessage(
                 content=(
-                    "You are an expert Resume Writer proficient in rephrasing text into key bullet points. You strictly follow all the provided steps in order."
+                    "You are an expert technical writer. "
+                    "Your goal is to strictly follow all the provided <Steps> and meet all the given <Criteria>."
                 )
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Job Posting>"
+                "\nThe ideal candidate is able to perform the following duties:\n{duties}\n"
+                "\nThe ideal candidate has the following qualifications:\n{qualifications}\n"
+                "\nThe ideal candidate has the following skills:\n{technical_skills}\n{non_technical_skills}"
+            ),
+            HumanMessagePromptTemplate.from_template("<Master Resume>\n{section}"),
+            HumanMessage(
+                content="<Instruction> Identify the relevant portions from the <Master Resume> that match the <Job Posting>, and "
+                "rephrase the relevant portions into key highlights, along with rating the relevance of each highlight to the <Job Posting> on a scale of 1-5."
+            ),
+            HumanMessage(
+                content="<Criteria> "
+                "\n- Each highlight must be based on what is mentioned in the <Master Resume>."
+                "\n- Combine similar highlights into a single one."
+                "\n- In each highlight, explain how that experience in the <Master Resume> demonstrates an ability to perform duties mentioned in the <Job Posting>."
+                "\n- In each highlight, try to use action verbs, give tangible and concrete examples, and include success metrics when available."
+                "\n- Each highlight must exceed 50 words, and may include more than 1 sentence."
+                "\n- Grammar, spellings, and sentence structure must be correct."
             ),
             HumanMessage(
                 content=(
-                    "Your goal is to condense and rephrase the provided Resume input into a few bullet points that demonstrate my expertise and relevance based on the provided job posting."
+                    "<Steps>"
+                    "\n- Create a <Plan> for following the <Instruction> while meeting all the <Criteria>."
+                    "\n- What <Additional Steps> are needed to follow the <Plan>?"
+                    "\n- Follow all steps one by one and show your <Work>."
+                    "\n- Verify that highlights are reflective of the <Master Resume> and not the <Job Posting>. Update if necessary."
+                    "\n- Verify that all <Criteria> are met, and update if necessary."
+                    "\n- Answer the <Instruction> with prefix <Final Answer>."
                 )
-            ),
-            HumanMessage(
-                content=(
-                    "\nExecute all the steps internally. Generate output for only those steps that begin with <Final Answer>. The steps to follow are:"
-                    "\nStep 1: I will give you a job posting."
-                    "\nStep 2: Then I will give you input from my Resume."
-                    "\nStep 3: You must condense and rephrase my Resume input from Step 2 into key bullet points that meet the following criteria:"
-                    "\n    - Each bullet point must be written to match my input with the duties, experience, and skill requirements mentioned in the job posting provided in Step 1."
-                    "\n    - Use action verbs. Give tangible and concrete examples, and include success metrics when available."
-                    "\n    - Find qualities such as leader, teamplayer, expert, etc. in the job posting. In each bullet point, incorporate some of these words that you found."
-                    "\n    - Each bullet point must must have more than 40 words and can include multiple sentences."
-                    "\n    - Grammar, spellings, and sentence structure must be correct."
-                    f"\n    - You must limit to no more than the most relevant {self.MAX_SECTION_ITEMS} bullet points."
-                    "\nStep 4: You must review and revise each bullet point to ensure all the above listed criteria are strictly met."
-                    "\nStep 5: You will rate the relevance of each bullet point to the job posting between 1 and 5."
-                    "\nStep 6: <Final Answer> You must output the bullet points and their relevance from Step 4 and Step 5."
-                )
-            ),
-            HumanMessage(content=("Let us begin...")),
-            HumanMessagePromptTemplate.from_template(
-                "Step 1: I am providing the job posting, which includes four sections about the job - <Duties>, <Experience requirements>, <Technical skills>, <Non-technical skills>. The entire job posting is enclosed in three backticks:"
-                "\n```\nJob Posting:"
-                "\n<Duties>\n{duties}\n"
-                "\n<Experience requirements>\n{skill_and_experience_requirements}\n"
-                "\n<Technical skills>\n{technical_skill_requirements}\n"
-                "\n<Non-technical skills>\n{soft_skill_requirements}\n"
-                "```"
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "Step 2: I am providing a section from my Resume as the input for you to rephrase. It is enclosed in four backticks:"
-                "\n````\nSection from my Resume:\n{section}\n````"
-            ),
-            HumanMessage(
-                content="You must now complete the rest of the steps, starting at Step 3."
-                "\nTips: Make sure to answer in the correct format, match all listed criteria, and stick to any word or item limits."
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
 
         llm = create_llm(**self.llm_kwargs)
-        return create_structured_output_chain(Resume_List, llm, prompt, **chain_kwargs)
-
-    def _skill_selector_chain(self, **chain_kwargs) -> LLMChain:
-        prompt_msgs = [
-            SystemMessage(
-                content=(
-                    "You are an expert Resume Reviewer proficient in extracting information a Resume. You strictly follow all the provided steps in order."
-                )
-            ),
-            HumanMessage(
-                content=(
-                    "Your goal is to read and understand both a job posting and my Resume, and extract a list of those skills that I possess which are the most relevant for the job."
-                )
-            ),
-            HumanMessage(
-                content=(
-                    "\nWe will follow the following steps:"
-                    "\nStep 1: I will give you the job posting."
-                    "\nStep 2: Then I will give you my Resume."
-                    "\nStep 3: You must extract a list of Technical Skills from my Resume in Step 2 that match the skills in the job posting from Step 1."
-                    "\nStep 4: You must extract a list of non-technical Soft Skills from my Resume in Step 2 that match the non-technical soft skills in the job posting from Step 1. Limit this list to the 10 most relevant Soft Skills."
-                )
-            ),
-            HumanMessage(content=("Let us begin...")),
-            HumanMessagePromptTemplate.from_template(
-                "Step 1: I am providing the job posting, which includes two sections about the job - <Technical skills>, <Non-technical skills>. The entire job posting is enclosed in three backticks:"
-                "\n```\nJob Posting:"
-                "\n<Technical skills>\n{technical_skill_requirements}\n"
-                "\n<Non-technical skills>\n{soft_skill_requirements}\n"
-                "```"
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "Step 2: I am providing my Resume, which includes two sections: <My Work Experience>, <My Projects>. My entire Resume is enclosed in four backticks:"
-                "\n````\nMy Resume:"
-                "\n<My Work Experience>\n{experiences}\n"
-                "\n<My Projects>\n{projects}\n"
-                "````"
-            ),
-            HumanMessage(
-                content="You must now complete the rest of the steps starting at Step 3, including any sub-steps."
-                "\nTips: Make sure to answer in the correct format and  and stick to any word or item limits."
-            ),
-        ]
-        prompt = ChatPromptTemplate(messages=prompt_msgs)
-
-        llm = create_llm(**self.llm_kwargs)
-        return create_structured_output_chain(
-            Resume_Skills, llm, prompt, **chain_kwargs
+        return LLMChain(
+            llm=llm,
+            prompt=prompt,
+            return_final_only=False,
+            **chain_kwargs,
         )
 
-    def _improver_chain(self, **chain_kwargs) -> LLMChain:
+    def _skills_matcher_chain(self, **chain_kwargs) -> LLMChain:
         prompt_msgs = [
             SystemMessage(
                 content=(
-                    "You are an expert Resume Reviewer proficient in making suggestions for improvements to a Resume. You strictly follow all the provided steps in order."
+                    "You are an expert technical writer. "
+                    "Your goal is to strictly follow all the provided <Steps> and meet all the given <Criteria>."
                 )
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Job Posting>"
+                "\nThe ideal candidate has the following skills:\n{technical_skills}\n{non_technical_skills}"
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Resume>" "\nExperience:\n{projects}\n{experiences}"
+            ),
+            HumanMessage(
+                content="<Instruction> Extract technical and non-technical skills from the <Resume> "
+                "that match the skills required in the <Job Posting>."
+            ),
+            HumanMessage(
+                content="<Criteria> "
+                "\n- Each skill must be based on what is mentioned in the <Resume>."
+                "\n- Technical skills are programming languages, technologies, and tools. Examples: Python, MS Office, Machine learning, Marketing, Optimization, GPT"
+                "\n- Non-technical skills are soft skills. Communication, Leadership, Adaptability, Teamwork, Problem solving, Critical thinking, Time management"
+                "\n- Each skill must be written in sentence case."
             ),
             HumanMessage(
                 content=(
-                    "Your goal is to read and understand both a job posting and my Resume, identify the requirements from the job posting that are missing in my Resume, and finally make suggestions for improvements."
+                    "<Steps>"
+                    "\n- Create a <Plan> for following the <Instruction> while meeting all the <Criteria>."
+                    "\n- What <Additional Steps> are needed to follow the <Plan>?"
+                    "\n- Follow all steps one by one and show your <Work>."
+                    "\n- Verify that skills are reflective of the <Resume> and not the <Job Posting>. Update if necessary."
+                    "\n- Verify that all <Criteria> are met, and update if necessary."
+                    "\n- Answer the <Instruction> with prefix <Final Answer>."
                 )
-            ),
-            HumanMessage(
-                content=(
-                    "\nWe will follow the following steps:"
-                    "\nStep 1: I will give you a job posting."
-                    "\nStep 2: Then I will give you my Resume."
-                    "\nStep 3: You must identify a list of those requirements from the job posting that are NOT present in my Resume."
-                    "\nStep 4: Additionally, you must also make suggestions to improve my Resume to address the list of missing requirements from Step 3."
-                )
-            ),
-            HumanMessage(content=("Let us begin...")),
-            HumanMessagePromptTemplate.from_template(
-                "Step 1: I am providing the job posting, which includes two sections about the job - <Duties>, <Experience requirements>. The entire job posting is enclosed in three backticks:"
-                "\n```\nJob Posting:"
-                "\n<Duties>\n{duties}\n"
-                "\n<Experience requirements>\n{skill_and_experience_requirements}\n"
-                "```"
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, <My Skills>. My entire Resume is enclosed in four backticks:"
-                "\n````\nMy Resume:"
-                "\n<My Education Degrees>\n{degrees}\n"
-                "\n<My Work Experience>\n{experiences}\n"
-                "\n<My Projects>\n{projects}\n"
-                "\n<My Skills>\n{skills}\n"
-                "````"
-            ),
-            HumanMessage(
-                content="You must now complete the rest of the steps starting at Step 3."
-                "\nTips: Make sure to provide all answers, answer in the correct format, and stick to any word or item limits."
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
 
         llm = create_llm(**self.llm_kwargs)
-        return create_structured_output_chain(
-            Resume_Improvements, llm, prompt, **chain_kwargs
-        )
-
-    def _language_check_chain(self, **chain_kwargs) -> LLMChain:
-        prompt_msgs = [
-            SystemMessage(
-                content=(
-                    "You are an expert in English language arts with advanced experience in proofreading, editing, spelling, grammar, proper sentence structure, and punctuation."
-                )
-            ),
-            HumanMessage(
-                content=(
-                    "Your goal is to carefully read the input to identify any grammatical or spelling errors. "
-                    "You will make appropriate suggestions to fix these errors. "
-                )
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "The input is my Resume, which includes four sections - Education, Experience, Projects, Skills. Find all errors and suggest improvements from the following input:"
-                "\n````\nMy Resume:"
-                "\nEducation\n{degrees}\n"
-                "\nExperience\n{experiences}\n"
-                "\nProjects\n{projects}\n"
-                "\nSkills\n{skills}\n"
-                "````"
-            ),
-            HumanMessage(
-                content="Tips: Make sure to answer in the correct format. Limit the list to the first 20 errors."
-            ),
-        ]
-        prompt = ChatPromptTemplate(messages=prompt_msgs)
-
-        llm = create_llm(**self.llm_kwargs)
-        return create_structured_output_chain(
-            Language_Improvements, llm, prompt, **chain_kwargs
+        return LLMChain(
+            llm=llm,
+            prompt=prompt,
+            return_final_only=False,
+            **chain_kwargs,
         )
 
     def _summary_writer_chain(self, **chain_kwargs) -> LLMChain:
         prompt_msgs = [
             SystemMessage(
                 content=(
-                    "You are an expert Resume Writer proficient in summarizing a resume based on a job posting. You strictly follow all the provided steps in order."
+                    "You are an expert technical writer. "
+                    "Your goal is to strictly follow all the provided <Steps> and meet all the given <Criteria>."
                 )
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Job Posting>\n{company}\n{job_summary}"
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Resume>"
+                "\nEducation:\n{degrees}\n"
+                "\nExperience:\n{projects}\n{experiences}\n"
+                "\nSkills:\n{skills}"
+            ),
+            HumanMessage(
+                content="<Instruction> Create a Resume Summary from my <Resume> "
+                "that showcases that I will be ideal for the <Job Posting>. I have provided <Examples> for how to write summaries."
+            ),
+            HumanMessage(
+                content="<Criteria>"
+                "\n- Summary must not exceed 200 words."
+                "\n- Summary must highlight my skills and experiences."
+                "\n- Include any relevant keywords from the <Job Posting> that also describe my experience from the <Resume>."
+                "\n- Grammar, spellings, and sentence structure must be correct."
+            ),
+            HumanMessage(
+                content="<Examples>"
+                "\n- Technical project manager with 7+ years of experience managing both agile and waterfall projects for large technology organizations. "
+                "Key strengths include budget management, contract and vendor relations, client-facing communications, stakeholder awareness, and cross-functional "
+                "team management. Excellent leadership, organization, and communication skills, with special experience bridging large teams and providing process "
+                "in the face of ambiguity."
+                "\n- Customer-oriented full sales cycle SMB account executive with 3+ years of experience maximizing sales and crushing quotas. Skilled at "
+                "building trusted, loyal relationships with high-profile clients, resulting in best-in-class performance for client retention. Passionate "
+                "about contributing my skills in sales to the role for Account Business Manager at Company."
             ),
             HumanMessage(
                 content=(
-                    "Your goal is to read and understand both a job posting and my Resume, and summarize my Resume according to the job posting."
+                    "<Steps>"
+                    "\n- Create a <Plan> for following the <Instruction> while meeting all the <Criteria>."
+                    "\n- What <Additional Steps> are needed to follow the <Plan>?"
+                    "\n- Follow all steps one by one and show your <Work>."
+                    "\n- Verify that summary is reflective of my <Resume> and not the <Job Posting>. Update if necessary."
+                    "\n- Verify that all <Criteria> are met, and update if necessary."
+                    "\n- Answer the <Instruction> with prefix <Final Answer>."
                 )
-            ),
-            HumanMessage(
-                content=(
-                    "\nWe will follow the following steps:"
-                    "\nStep 1: I will give you a job posting."
-                    "\nStep 2: Then I will give you my Resume."
-                    "\nStep 3: You must summarize my Resume from Step 2 into a short paragraph that highlights my accomplishments, relevant skills, experience, "
-                    "expertise, and other credentials that demonstrate how I am the most suitable candidate to apply for the job posting from Step 1. "
-                    "The Summary must not exceed 80 words. I am providing below some examples to familiarize you with the writing style:"
-                    "\nSummary Example:"
-                    "\nTechnical project manager with over seven years of experience managing both agile and waterfall projects for large technology organizations. "
-                    "Key strengths include budget management, contract and vendor relations, client-facing communications, stakeholder awareness, and cross-functional "
-                    "team management. Excellent leadership, organization, and communication skills, with special experience bridging large teams and providing process "
-                    "in the face of ambiguity."
-                )
-            ),
-            HumanMessage(content=("Let us begin...")),
-            HumanMessagePromptTemplate.from_template(
-                "Step 1: I am providing a summary of the job posting, enclosed in three backticks:"
-                "\n```\nJob Posting: {job_summary}```"
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "Step 2: I am providing my Resume, which includes four sections - <My Education Degrees>, <My Work Experience>, <My Projects>, <My Skills>. My entire Resume is enclosed in four backticks:"
-                "\n````\nMy Resume:"
-                "\n<My Education Degrees>\n{degrees}\n"
-                "\n<My Work Experience>\n{experiences}\n"
-                "\n<My Projects>\n{projects}\n"
-                "\n<My Skills>\n{skills}\n"
-                "````"
-            ),
-            HumanMessage(
-                content="You must now complete the rest of the steps starting at Step 3."
-                "\nTips: Make sure to answer in the correct format, and stick to any word or item limits."
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
 
         llm = create_llm(**self.llm_kwargs)
-        return create_structured_output_chain(
-            Resume_Summary, llm, prompt, **chain_kwargs
+        return LLMChain(
+            llm=llm,
+            prompt=prompt,
+            return_final_only=False,
+            **chain_kwargs,
+        )
+
+    def _improver_chain(self, **chain_kwargs) -> LLMChain:
+        prompt_msgs = [
+            SystemMessage(
+                content=(
+                    "You are an expert critic. "
+                    "Your goal is to strictly follow all the provided <Steps> and meet all the given <Criteria>."
+                )
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Job Posting>"
+                "\nThe ideal candidate is able to perform the following duties:\n{duties}\n"
+                "\nThe ideal candidate has the following qualifications:\n{qualifications}\n"
+                "\nThe ideal candidate has the following skills:\n{technical_skills}\n{non_technical_skills}"
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Resume>"
+                "\nSummary:\n{summary}\n"
+                "\n{experiences}"
+                "\n{projects}"
+                "\n{education}"
+                "\n{skills}"
+            ),
+            HumanMessage(
+                content="<Instruction> Critique my <Resume>, and suggest how I can improve it "
+                "so it showcases that I am the ideal candidate who meets all the requirements of the <Job Posting>."
+            ),
+            HumanMessage(
+                content="<Criteria>"
+                "\n- Find any spelling or grammar errors in my <Resume>, and include suggestions to fix them."
+                "\n- Compile all your suggestions from <Work> into the <Final Answer>."
+                "\n- For each suggestion in the <Final Answer>, include the respective <Resume> section, what needs to be improved, and how to improve it."
+                "\n- In the <Final Answer>, include a section for Spelling and Grammar, including any suggestions for improvements."
+            ),
+            HumanMessage(
+                content=(
+                    "<Steps>"
+                    "\n- Create a <Plan> for following the <Instruction> while meeting all the <Criteria>."
+                    "\n- What <Additional Steps> are needed to follow the <Plan>?"
+                    "\n- Follow all steps one by one and show your <Work>."
+                    "\n- Verify that all <Criteria> are met, and update if necessary."
+                    "\n- Answer the <Instruction> with prefix <Final Answer>."
+                )
+            ),
+        ]
+        prompt = ChatPromptTemplate(messages=prompt_msgs)
+
+        llm = create_llm(**self.llm_kwargs)
+        return LLMChain(
+            llm=llm,
+            prompt=prompt,
+            return_final_only=False,
+            **chain_kwargs,
         )
 
     def _get_degrees(self, resume: dict):
@@ -522,7 +525,7 @@ class Resume_Builder:
         for t in titles:
             if "startdate" in t and "enddate" in t:
                 if t["enddate"] == "current":
-                    last_date = date.today().strftime("%Y-%m-%d")
+                    last_date = datetime.today().strftime("%Y-%m-%d")
                 else:
                     last_date = t["enddate"]
             result += datediff_years(start_date=t["startdate"], end_date=last_date)
@@ -561,19 +564,34 @@ class Resume_Builder:
             else:
                 l1.append(s)
 
+    def _print_debug_message(self, chain_kwargs: dict, chain_output_unformatted: str):
+        message = "Final answer is missing from the chain output."
+        if not chain_kwargs.get("verbose"):
+            message += "\nChain output:\n" + chain_output_unformatted
+        print(message)
+
     def rewrite_section(self, section: list | str, **chain_kwargs) -> dict:
-        chain = self._section_rewriter_chain(**chain_kwargs)
+        chain = self._section_highlighter_chain(**chain_kwargs)
         chain_inputs = format_prompt_inputs_as_strings(
             prompt_inputs=chain.prompt.input_variables,
             **self.parsed_job,
             section=section,
         )
-        section_revised = chain.predict(**chain_inputs).dict()
+        section_revised_unformatted = chain.predict(**chain_inputs)
+        if "verbose" in chain_kwargs and chain_kwargs["verbose"]:
+            print("Chain output:\n" + section_revised_unformatted)
+        section_revised = self.extract_from_input(
+            pydantic_object=Resume_Section_Highlighter_Output,
+            input=section_revised_unformatted,
+        )
+        if "final_answer" not in section_revised:
+            self._print_debug_message(chain_kwargs, section_revised_unformatted)
+            return None
         # sort section based on relevance in descending order
         section_revised = sorted(
-            section_revised["items"], key=lambda d: d["relevance"] * -1
+            section_revised["final_answer"], key=lambda d: d["relevance"] * -1
         )
-        return [s["item"] for s in section_revised]
+        return [s["highlight"] for s in section_revised]
 
     def rewrite_unedited_experiences(self, **chain_kwargs) -> dict:
         result = []
@@ -590,61 +608,45 @@ class Resume_Builder:
 
         return result
 
-    def extract_skills(self, **chain_kwargs) -> dict:
-        chain = self._skill_selector_chain(**chain_kwargs)
+    def extract_matched_skills(self, **chain_kwargs) -> dict:
+        chain = self._skills_matcher_chain(**chain_kwargs)
+        # We don't use the skills provided in raw resume because the LLM focuses too much n them
+        # Instead we will combine those skills with the ones extracted by the LLM
         chain_inputs = format_prompt_inputs_as_strings(
             prompt_inputs=chain.prompt.input_variables,
             **self.parsed_job,
             degrees=self.degrees,
             experiences=self._format_experiences_for_prompt(),
-            skills=self._format_skills_for_prompt(self.skills_raw),
             projects=self.projects,
         )
-
-        extracted_skills = chain.predict(**chain_inputs).dict()
+        extracted_skills_unformatted = chain.predict(**chain_inputs)
+        if "verbose" in chain_kwargs and chain_kwargs["verbose"]:
+            print("Chain output:\n" + extracted_skills_unformatted)
+        extracted_skills = self.extract_from_input(
+            pydantic_object=Resume_Skills_Matcher_Output,
+            input=extracted_skills_unformatted,
+        )
+        if "final_answer" not in extracted_skills:
+            self._print_debug_message(chain_kwargs, extracted_skills_unformatted)
+            return None
+        extracted_skills = extracted_skills["final_answer"]
         result = []
-        if "software_skills" in extracted_skills:
+        if "technical_skills" in extracted_skills:
             result.append(
-                dict(category="Technical", skills=extracted_skills["software_skills"])
+                dict(category="Technical", skills=extracted_skills["technical_skills"])
             )
-        if "soft_skills" in extracted_skills:
+        if "non_technical_skills" in extracted_skills:
             result.append(
-                dict(category="Non-technical", skills=extracted_skills["soft_skills"])
+                dict(
+                    category="Non-technical",
+                    skills=extracted_skills["non_technical_skills"],
+                )
             )
         # Add skills from raw file
         self._combine_skill_lists(result, self.skills_raw)
         return result
 
-    def suggest_improvements(self, **chain_kwargs) -> dict:
-        chain = self._improver_chain(**chain_kwargs)
-        chain_inputs = format_prompt_inputs_as_strings(
-            prompt_inputs=chain.prompt.input_variables,
-            **self.parsed_job,
-            degrees=self.degrees,
-            projects=self.projects,
-            experiences=self._format_experiences_for_prompt(),
-            skills=self._format_skills_for_prompt(self.skills),
-        )
-        improvements = chain.predict(**chain_inputs).dict()["improvements"]
-
-        chain = self._language_check_chain(**chain_kwargs)
-        chain_inputs = format_prompt_inputs_as_strings(
-            prompt_inputs=chain.prompt.input_variables,
-            **self.parsed_job,
-            degrees=self.degrees,
-            projects=self.projects,
-            experiences=self._format_experiences_for_prompt(),
-            skills=self._format_skills_for_prompt(self.skills),
-        )
-        language_fixes = chain.predict(**chain_inputs).dict()
-        language_fixes = [
-            f"{fix['error']} -> {fix['fix']}" for fix in language_fixes["fixes"]
-        ]
-        improvements.append({"Language improvements": language_fixes})
-
-        return improvements
-
-    def create_summary(self, **chain_kwargs) -> dict:
+    def write_summary(self, **chain_kwargs) -> dict:
         chain = self._summary_writer_chain(**chain_kwargs)
         chain_inputs = format_prompt_inputs_as_strings(
             prompt_inputs=chain.prompt.input_variables,
@@ -654,8 +656,38 @@ class Resume_Builder:
             experiences=self._format_experiences_for_prompt(),
             skills=self._format_skills_for_prompt(self.skills),
         )
+        summary_unformatted = chain.predict(**chain_inputs)
+        if "verbose" in chain_kwargs and chain_kwargs["verbose"]:
+            print("Chain output:\n" + summary_unformatted)
+        summary = self.extract_from_input(
+            pydantic_object=Resume_Summarizer_Output, input=summary_unformatted
+        )
+        if "final_answer" not in summary:
+            self._print_debug_message(chain_kwargs, summary_unformatted)
+            return None
+        return summary["final_answer"]
 
-        return chain.predict(**chain_inputs).dict()["summary"]
+    def suggest_improvements(self, **chain_kwargs) -> dict:
+        chain = self._improver_chain(**chain_kwargs)
+        chain_inputs = format_prompt_inputs_as_strings(
+            prompt_inputs=chain.prompt.input_variables,
+            **self.parsed_job,
+            education=utils.dict_to_yaml_string(dict(Education=self.education)),
+            projects=utils.dict_to_yaml_string(dict(Projects=self.projects)),
+            summary=self.summary,
+            experiences=utils.dict_to_yaml_string(dict(Experiences=self.experiences)),
+            skills=utils.dict_to_yaml_string(dict(Skills=self.skills)),
+        )
+        improvements_unformatted = chain.predict(**chain_inputs)
+        if "verbose" in chain_kwargs and chain_kwargs["verbose"]:
+            print("Chain output:\n" + improvements_unformatted)
+        improvements = self.extract_from_input(
+            pydantic_object=Resume_Improver_Output, input=improvements_unformatted
+        )
+        if "final_answer" not in improvements:
+            self._print_debug_message(chain_kwargs, improvements_unformatted)
+            return None
+        return improvements["final_answer"]
 
     def finalize(self) -> dict:
         return dict(
