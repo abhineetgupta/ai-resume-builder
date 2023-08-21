@@ -47,9 +47,9 @@ def create_llm(**kwargs):
     return chat_model(**kwargs)
 
 
-def format_list_as_string(l: list) -> str:
+def format_list_as_string(l: list, list_sep: str = "\n- ") -> str:
     if isinstance(l, list):
-        return "\n".join(l)
+        return list_sep + list_sep.join(l)
     return str(l)
 
 
@@ -67,6 +67,7 @@ def parse_date(d: str) -> datetime:
     try:
         return dateparser.parse(str(d), default=default_date)
     except dateparser._parser.ParserError as e:
+        langchain.llm_cache.clear()
         logger.error(f"Date input `{d}` could not be parsed.")
         raise e
 
@@ -226,11 +227,15 @@ class Extractor_LLM:
         )
 
     def extract_from_input(self, pydantic_object, input: str, **chain_kwargs) -> dict:
-        return (
-            self._extractor_chain(pydantic_object=pydantic_object, **chain_kwargs)
-            .predict(input=input)
-            .dict()
-        )
+        try:
+            return (
+                self._extractor_chain(pydantic_object=pydantic_object, **chain_kwargs)
+                .predict(input=input)
+                .dict()
+            )
+        except Exception as e:
+            print("Encountered exception during parsing input. See below:")
+            print(e)
 
 
 class Job_Post(Extractor_LLM):
@@ -296,22 +301,23 @@ class Resume_Builder(Extractor_LLM):
             ),
             HumanMessagePromptTemplate.from_template(
                 "<Job Posting>"
-                "\nThe ideal candidate is able to perform the following duties:\n{duties}\n"
-                "\nThe ideal candidate has the following qualifications:\n{qualifications}\n"
-                "\nThe ideal candidate has the following skills:\n{technical_skills}\n{non_technical_skills}"
+                "\nThe ideal candidate is able to perform the following duties:{duties}\n"
+                "\nThe ideal candidate has the following qualifications:{qualifications}\n"
+                "\nThe ideal candidate has the following skills:{technical_skills}\n{non_technical_skills}"
             ),
-            HumanMessagePromptTemplate.from_template("<Master Resume>\n{section}"),
+            HumanMessagePromptTemplate.from_template("<Master Resume>{section}"),
             HumanMessage(
-                content="<Instruction> Identify the relevant portions from the <Master Resume> that match the <Job Posting>, and "
-                "rephrase the relevant portions into key highlights, along with rating the relevance of each highlight to the <Job Posting> on a scale of 1-5."
+                content="<Instruction> Identify the relevant portions from the <Master Resume> that match the <Job Posting>, "
+                "rephrase these relevant portions into highlights, and rate the relevance of each highlight to the <Job Posting> on a scale of 1-5."
             ),
             HumanMessage(
                 content="<Criteria> "
                 "\n- Each highlight must be based on what is mentioned in the <Master Resume>."
-                "\n- Combine similar highlights into a single one."
-                "\n- In each highlight, explain how that experience in the <Master Resume> demonstrates an ability to perform duties mentioned in the <Job Posting>."
-                "\n- In each highlight, try to use action verbs, give tangible and concrete examples, and include success metrics when available."
-                "\n- Each highlight must exceed 50 words, and may include more than 1 sentence."
+                # "\n- Include highlights from <Master Resume> that may be tangentially related to the <Job Posting>."
+                # "\n- Combine any similar highlights into a single one."
+                "\n- In each highlight, include how that experience in the <Master Resume> demonstrates an ability to perform duties mentioned in the <Job Posting>."
+                "\n- In each highlight, try to include action verbs, give tangible and concrete examples, and include success metrics when available."
+                # "\n- Each highlight must exceed 50 words, and may include more than 1 sentence."
                 "\n- Grammar, spellings, and sentence structure must be correct."
             ),
             HumanMessage(
@@ -322,7 +328,7 @@ class Resume_Builder(Extractor_LLM):
                     "\n- Follow all steps one by one and show your <Work>."
                     "\n- Verify that highlights are reflective of the <Master Resume> and not the <Job Posting>. Update if necessary."
                     "\n- Verify that all <Criteria> are met, and update if necessary."
-                    "\n- Answer the <Instruction> with prefix <Final Answer>."
+                    "\n- Provide the answer to the <Instruction> with prefix <Final Answer>."
                 )
             ),
         ]
@@ -346,10 +352,10 @@ class Resume_Builder(Extractor_LLM):
             ),
             HumanMessagePromptTemplate.from_template(
                 "<Job Posting>"
-                "\nThe ideal candidate has the following skills:\n{technical_skills}\n{non_technical_skills}"
+                "\nThe ideal candidate has the following skills:{technical_skills}\n{non_technical_skills}"
             ),
             HumanMessagePromptTemplate.from_template(
-                "<Resume>" "\nExperience:\n{projects}\n{experiences}"
+                "<Resume>" "\nExperience:{projects}\n{experiences}"
             ),
             HumanMessage(
                 content="<Instruction> Extract technical and non-technical skills from the <Resume> "
@@ -370,7 +376,7 @@ class Resume_Builder(Extractor_LLM):
                     "\n- Follow all steps one by one and show your <Work>."
                     "\n- Verify that skills are reflective of the <Resume> and not the <Job Posting>. Update if necessary."
                     "\n- Verify that all <Criteria> are met, and update if necessary."
-                    "\n- Answer the <Instruction> with prefix <Final Answer>."
+                    "\n- Provide the answer to the <Instruction> with prefix <Final Answer>."
                 )
             ),
         ]
@@ -397,40 +403,41 @@ class Resume_Builder(Extractor_LLM):
             ),
             HumanMessagePromptTemplate.from_template(
                 "<Resume>"
-                "\nEducation:\n{degrees}\n"
-                "\nExperience:\n{projects}\n{experiences}\n"
-                "\nSkills:\n{skills}"
+                "\nEducation:{degrees}\n"
+                "\nExperience:{projects}\n{experiences}\n"
+                "\nSkills:{skills}"
             ),
             HumanMessage(
-                content="<Instruction> Create a Resume Summary from my <Resume> "
-                "that showcases that I will be ideal for the <Job Posting>. I have provided <Examples> for how to write summaries."
+                content="<Instruction> Create a Professional Summary from my <Resume>."
             ),
             HumanMessage(
                 content="<Criteria>"
+                "\n- Summary must showcase that I will be ideal for the <Job Posting>."
                 "\n- Summary must not exceed 200 words."
                 "\n- Summary must highlight my skills and experiences."
                 "\n- Include any relevant keywords from the <Job Posting> that also describe my experience from the <Resume>."
                 "\n- Grammar, spellings, and sentence structure must be correct."
             ),
-            HumanMessage(
-                content="<Examples>"
-                "\n- Technical project manager with 7+ years of experience managing both agile and waterfall projects for large technology organizations. "
-                "Key strengths include budget management, contract and vendor relations, client-facing communications, stakeholder awareness, and cross-functional "
-                "team management. Excellent leadership, organization, and communication skills, with special experience bridging large teams and providing process "
-                "in the face of ambiguity."
-                "\n- Customer-oriented full sales cycle SMB account executive with 3+ years of experience maximizing sales and crushing quotas. Skilled at "
-                "building trusted, loyal relationships with high-profile clients, resulting in best-in-class performance for client retention. Passionate "
-                "about contributing my skills in sales to the role for Account Business Manager at Company."
-            ),
+            # HumanMessage(
+            #     content="<Examples>"
+            #     "\n- Technical project manager with 7+ years of experience managing both agile and waterfall projects for large technology organizations. "
+            #     "Key strengths include budget management, contract and vendor relations, client-facing communications, stakeholder awareness, and cross-functional "
+            #     "team management. Excellent leadership, organization, and communication skills, with special experience bridging large teams and providing process "
+            #     "in the face of ambiguity."
+            #     "\n- Customer-oriented full sales cycle SMB account executive with 3+ years of experience maximizing sales and crushing quotas. Skilled at "
+            #     "building trusted, loyal relationships with high-profile clients, resulting in best-in-class performance for client retention. Passionate "
+            #     "about contributing my skills in sales to the role for Account Business Manager at Company."
+            # ),
             HumanMessage(
                 content=(
                     "<Steps>"
                     "\n- Create a <Plan> for following the <Instruction> while meeting all the <Criteria>."
+                    # "\n- Use the <Examples> for writing style typically used for summaries."
                     "\n- What <Additional Steps> are needed to follow the <Plan>?"
                     "\n- Follow all steps one by one and show your <Work>."
                     "\n- Verify that summary is reflective of my <Resume> and not the <Job Posting>. Update if necessary."
                     "\n- Verify that all <Criteria> are met, and update if necessary."
-                    "\n- Answer the <Instruction> with prefix <Final Answer>."
+                    "\n- Provide the answer to the <Instruction> with prefix <Final Answer>."
                 )
             ),
         ]
@@ -454,13 +461,13 @@ class Resume_Builder(Extractor_LLM):
             ),
             HumanMessagePromptTemplate.from_template(
                 "<Job Posting>"
-                "\nThe ideal candidate is able to perform the following duties:\n{duties}\n"
-                "\nThe ideal candidate has the following qualifications:\n{qualifications}\n"
-                "\nThe ideal candidate has the following skills:\n{technical_skills}\n{non_technical_skills}"
+                "\nThe ideal candidate is able to perform the following duties:{duties}\n"
+                "\nThe ideal candidate has the following qualifications:{qualifications}\n"
+                "\nThe ideal candidate has the following skills:{technical_skills}\n{non_technical_skills}"
             ),
             HumanMessagePromptTemplate.from_template(
                 "<Resume>"
-                "\nSummary:\n{summary}\n"
+                "\nSummary:{summary}\n"
                 "\n{experiences}"
                 "\n{projects}"
                 "\n{education}"
@@ -484,7 +491,7 @@ class Resume_Builder(Extractor_LLM):
                     "\n- What <Additional Steps> are needed to follow the <Plan>?"
                     "\n- Follow all steps one by one and show your <Work>."
                     "\n- Verify that all <Criteria> are met, and update if necessary."
-                    "\n- Answer the <Instruction> with prefix <Final Answer>."
+                    "\n- Provide the answer to the <Instruction> with prefix <Final Answer>."
                 )
             ),
         ]
@@ -537,9 +544,9 @@ class Resume_Builder(Extractor_LLM):
             curr = ""
             if "titles" in exp:
                 exp_time = self._get_cumulative_time_from_titles(exp["titles"])
-                curr += f"{exp_time} years experience in:\n"
+                curr += f"{exp_time} years experience in:"
             if "highlights" in exp:
-                curr += format_list_as_string(exp["highlights"])
+                curr += format_list_as_string(exp["highlights"], list_sep="\n  - ")
                 curr += "\n"
                 result.append(curr)
         return result
@@ -584,7 +591,7 @@ class Resume_Builder(Extractor_LLM):
             pydantic_object=Resume_Section_Highlighter_Output,
             input=section_revised_unformatted,
         )
-        if "final_answer" not in section_revised:
+        if not section_revised or "final_answer" not in section_revised:
             self._print_debug_message(chain_kwargs, section_revised_unformatted)
             return None
         # sort section based on relevance in descending order
@@ -626,7 +633,7 @@ class Resume_Builder(Extractor_LLM):
             pydantic_object=Resume_Skills_Matcher_Output,
             input=extracted_skills_unformatted,
         )
-        if "final_answer" not in extracted_skills:
+        if not extracted_skills or "final_answer" not in extracted_skills:
             self._print_debug_message(chain_kwargs, extracted_skills_unformatted)
             return None
         extracted_skills = extracted_skills["final_answer"]
@@ -662,7 +669,7 @@ class Resume_Builder(Extractor_LLM):
         summary = self.extract_from_input(
             pydantic_object=Resume_Summarizer_Output, input=summary_unformatted
         )
-        if "final_answer" not in summary:
+        if not summary or "final_answer" not in summary:
             self._print_debug_message(chain_kwargs, summary_unformatted)
             return None
         return summary["final_answer"]
@@ -684,7 +691,7 @@ class Resume_Builder(Extractor_LLM):
         improvements = self.extract_from_input(
             pydantic_object=Resume_Improver_Output, input=improvements_unformatted
         )
-        if "final_answer" not in improvements:
+        if not improvements or "final_answer" not in improvements:
             self._print_debug_message(chain_kwargs, improvements_unformatted)
             return None
         return improvements["final_answer"]
@@ -694,7 +701,7 @@ class Resume_Builder(Extractor_LLM):
             basic=self.basic_info,
             summary=self.summary,
             education=self.education,
-            projects=self.projects,
             experiences=self.experiences,
+            projects=self.projects,
             skills=self.skills,
         )
