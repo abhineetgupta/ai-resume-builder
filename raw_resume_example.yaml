@@ -41,8 +41,8 @@ experiences:
         startdate: 1988
         enddate: 1988
     # the unedited tag in experiences can be used to automatically have the LLM rewrite it as highlights
-    unedited: |-
-      So this professor of educational psychology at the university decided to test me on math. I of course
+    unedited:
+      - So this professor of educational psychology at the university decided to test me on math. I of course
       beat all his expectations. True to the American dream, he became known for publishing a paper about 
       me in the journal Intelligence.
     
@@ -61,8 +61,8 @@ experiences:
         startdate: 1977
         enddate: 1977
     # the unedited tag in experiences can be used to automatically have the LLM rewrite it as highlights
-    unedited: |-
-      I was asked to give the 23rd root of a 201-digit number. I gave my answer in a mere 50 seconds, which 
+    unedited:
+      - I was asked to give the 23rd root of a 201-digit number. I gave my answer in a mere 50 seconds, which 
       had to be later confirmed by the US Bureau of Standards using the UNIVAC 1101 computer. Confirming
       my answer required writing a special program to perform such a large calculation, and it took the 
       meager computer longer time than me.

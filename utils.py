@@ -40,9 +40,9 @@ def read_yaml(yaml_text: str = "", filename: str = "") -> dict:
 
 
 def read_jobfile(filename: str) -> str:
-    with open(filename, "rb") as stream:
+    with open(filename, "r") as stream:
         try:
-            return stream.read()
+            return stream.read().strip()
         except OSError as e:
             logger.error(f"The {filename} could not be read.")
             raise e
@@ -51,7 +51,7 @@ def read_jobfile(filename: str) -> str:
 def write_yaml(d: dict, filename: str = None) -> None:
     yaml.allow_unicode = True
     if filename:
-        with open(filename, "wb") as stream:
+        with open(filename, "w") as stream:
             try:
                 yaml.dump(d, stream)
             except YAMLError as e:
