@@ -299,13 +299,6 @@ class Resume_Builder(Extractor_LLM):
                     "Your goal is to strictly follow all the provided <Steps> and meet all the given <Criteria>."
                 )
             ),
-            HumanMessagePromptTemplate.from_template(
-                "<Job Posting>"
-                "\nThe ideal candidate is able to perform the following duties:{duties}\n"
-                "\nThe ideal candidate has the following qualifications:{qualifications}\n"
-                "\nThe ideal candidate has the following skills:{technical_skills}\n{non_technical_skills}"
-            ),
-            HumanMessagePromptTemplate.from_template("<Master Resume>{section}"),
             HumanMessage(
                 content="<Instruction> Identify the relevant portions from the <Master Resume> that match the <Job Posting>, "
                 "rephrase these relevant portions into highlights, and rate the relevance of each highlight to the <Job Posting> on a scale of 1-5."
@@ -331,6 +324,13 @@ class Resume_Builder(Extractor_LLM):
                     "\n- Provide the answer to the <Instruction> with prefix <Final Answer>."
                 )
             ),
+            HumanMessagePromptTemplate.from_template(
+                "<Job Posting>"
+                "\nThe ideal candidate is able to perform the following duties:{duties}\n"
+                "\nThe ideal candidate has the following qualifications:{qualifications}\n"
+                "\nThe ideal candidate has the following skills:{technical_skills}\n{non_technical_skills}"
+            ),
+            HumanMessagePromptTemplate.from_template("<Master Resume>{section}"),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
 
@@ -349,13 +349,6 @@ class Resume_Builder(Extractor_LLM):
                     "You are an expert technical writer. "
                     "Your goal is to strictly follow all the provided <Steps> and meet all the given <Criteria>."
                 )
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "<Job Posting>"
-                "\nThe ideal candidate has the following skills:{technical_skills}\n{non_technical_skills}"
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "<Resume>" "\nExperience:{projects}\n{experiences}"
             ),
             HumanMessage(
                 content="<Instruction> Extract technical and non-technical skills from the <Resume> "
@@ -379,6 +372,13 @@ class Resume_Builder(Extractor_LLM):
                     "\n- Provide the answer to the <Instruction> with prefix <Final Answer>."
                 )
             ),
+            HumanMessagePromptTemplate.from_template(
+                "<Job Posting>"
+                "\nThe ideal candidate has the following skills:{technical_skills}\n{non_technical_skills}"
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Resume>" "\nExperience:{projects}\n{experiences}"
+            ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
 
@@ -397,15 +397,6 @@ class Resume_Builder(Extractor_LLM):
                     "You are an expert technical writer. "
                     "Your goal is to strictly follow all the provided <Steps> and meet all the given <Criteria>."
                 )
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "<Job Posting>\n{company}\n{job_summary}"
-            ),
-            HumanMessagePromptTemplate.from_template(
-                "<Resume>"
-                "\nEducation:{degrees}\n"
-                "\nExperience:{projects}\n{experiences}\n"
-                "\nSkills:{skills}"
             ),
             HumanMessage(
                 content="<Instruction> Create a Professional Summary from my <Resume>."
@@ -439,6 +430,15 @@ class Resume_Builder(Extractor_LLM):
                     "\n- Verify that all <Criteria> are met, and update if necessary."
                     "\n- Provide the answer to the <Instruction> with prefix <Final Answer>."
                 )
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Job Posting>\n{company}\n{job_summary}"
+            ),
+            HumanMessagePromptTemplate.from_template(
+                "<Resume>"
+                "\nEducation:{degrees}\n"
+                "\nExperience:{projects}\n{experiences}\n"
+                "\nSkills:{skills}"
             ),
         ]
         prompt = ChatPromptTemplate(messages=prompt_msgs)
