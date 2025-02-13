@@ -50,7 +50,8 @@ RUN pip install --no-cache-dir \
     'isort' \
     'langchain' \
     'openai' \
-    'pathvalidate' && \
+    'pathvalidate' \
+    'pydantic==1.10.8' && \
     mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
     fix-permissions "/home/${NB_USER}"
