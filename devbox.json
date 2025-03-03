@@ -1,5 +1,4 @@
 {
-  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/0.13.7/.schema/devbox.schema.json",
   "env_from": ".env",
   "env": {
     "UV_PYTHON": "$VENV_DIR/bin/python"
